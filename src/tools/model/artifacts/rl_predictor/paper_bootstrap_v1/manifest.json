@@ -1,0 +1,10 @@
+{
+  "approval": {
+    "report_sha256": "e75464af0a3f0d4e8bcd12793e83da186f9a43bedb4223a17162181c5368a117",
+    "scope": "paper"
+  },
+  "feature_schema": "rl_predictor.features.v1",
+  "policy_sha256": "70b1dffc0d5b281d1a6b05799607f56859f59d234ab795684fc9f8c8a0aa376a",
+  "predictor_sha256": "ef4e4b0860ef9601fb21462539f4d43d2c8af378060eb2dcb63d153502e4c396",
+  "schema_version": 1
+}

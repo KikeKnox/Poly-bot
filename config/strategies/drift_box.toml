@@ -1,0 +1,51 @@
+# DriftBox — biased entry + deferred parity box.
+#
+# Phase 1: buys the leg favored by the oracle (FOK) when
+#          |fair_value − 0.5| > min_confidence.
+# Phase 2: completes the opposite leg (risk-free box) when
+#          cost_a + opp_ask ≤ 1 − fee_threshold − min_box_profit.
+# Bail:    sells leg A if the oracle reverses > bail_threshold_pct
+#          for ≥ 3 checks, or by time if remaining < bail_secs
+#          and the position is at a loss.
+#
+# Gate to live: paper calibration ≥ 48h with confirmed WR.
+# Starts switched off (enabled = false).
+
+[drift_box]
+enabled = false
+
+max_orders_per_hour   = 20
+max_order_usdc        = "15"
+daily_loss_usdc_stop  = "30"
+
+# Prediction: minimum |fv − 0.5| threshold to choose a side.
+# Restored 0.05→0.08 — the documented condition ("restore if WR < 50%")
+# was triggered: WR 44.3% (n=70) in the calibration. max_entry_price stays
+# at 0.62: its condition (box_completed < 50%) was NOT triggered (50.8%).
+min_confidence        = "0.08"
+
+# Entry: maximum ask of leg A.
+# Relaxed 0.58→0.62 to see more entries; restore if box_completed/box_attempts < 50%.
+max_entry_price       = "0.62"
+
+# Box: minimum profit required when completing leg B.
+# cost_a + opp_ask ≤ 1 − fee_threshold − min_box_profit.
+min_box_profit        = "0.03"
+fee_threshold         = "0.02"
+
+# Contingency (bail-sell):
+# Relative adverse move of the underlying that triggers the bail.
+bail_threshold_pct    = "0.02"
+# Minimum bid of A to execute the bail-sell (do not sell into a dry market).
+min_bail_bid          = "0.10"
+# Seconds before the close for a forced bail if the position is at a loss.
+bail_secs             = 30
+
+# Entry window: [min_lead_secs, max_window_secs] of remaining time.
+min_lead_secs         = 30
+max_window_secs       = 240
+
+# Maximum size in shares per order. 0 = no cap (primary limit: max_order_usdc).
+max_size_shares       = "0"
+# Maximum tolerable bid-ask spread on entry. 0 = no filter.
+max_bid_ask_spread    = "0"

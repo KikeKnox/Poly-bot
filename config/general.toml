@@ -1,0 +1,323 @@
+# ── General ───────────────────────────────────────────────────────────────────
+# Base bot configuration. Override with HRF_* environment variables (double
+# underscore for nesting: HRF_RISK__MAX_DRAWDOWN_PCT).
+
+# Startup mode: "paper" (SimulatedRouter) or "live" (ClobRouter).
+mode = "paper"
+
+# Path of the SQLite database file.
+db_path = "hrf_state.sqlite"
+
+# EOA address and CLOB API credentials — loaded from .env (POLY_PRIVATE_KEY, etc.)
+# Do not put secrets here.
+
+# External service URLs
+clob_api_url = "https://clob.polymarket.com"
+gamma_api_url = "https://gamma-api.polymarket.com"
+
+# ── Oracle (Binance WebSocket) ─────────────────────────────────────────────────
+[oracle]
+ws_url = "wss://stream.binance.com:9443"
+# Maximum time without messages before reconnecting (seconds).
+stale_secs = 60
+# Keepalive ping interval (seconds).
+ping_interval_secs = 20
+# Discards prints whose price jump exceeds this ratio (outlier filter).
+max_jump_ratio = "0.05"
+# Minimum session duration to reset the reconnect backoff (seconds).
+min_session_secs_for_backoff_reset = 60
+
+# USDS-M futures liquidations (@forceOrder) as a cascade signal.
+# Observation only: accumulated in VolSnapshot.liq_net_60s/liq_total_60s and
+# logged in pm_entry. Feed OFF by default (it is the most expensive pipe). The stream is
+# a sample (max 1 order/1s per symbol), enough to detect cascades.
+# futures_liq_enabled = false
+# futures_ws_url = "wss://fstream.binance.com"
+
+# ── Market feed (Polymarket WebSocket) ────────────────────────────────────────
+[market_feed]
+# Slug patterns that identify the markets to trade.
+bracket_slug_patterns = ["btc-updown", "eth-updown", "sol-updown", "bnb-updown", "xrp-updown", "doge-updown"]
+# endDate window for discovery: markets closing between now and now+N hours.
+end_date_max_hours = 24
+# Gamma API polling interval for new brackets (seconds).
+market_poll_interval_secs = 30
+# Concurrency of the discovery HTTP fetches (Gamma pagination + fee-rates).
+# (Historical name: it used to limit the resync GET /book calls, which no longer exist
+#  as a per-token request queue — see resync_* below.)
+resync_max_concurrent = 10
+# ── REST resync (batched sweeper, resync.rs) ───────────────────────────────
+# The WS is the primary book channel: when resubscribing after a reconnect the
+# server pushes snapshots of all live tokens. REST only repairs the
+# STRAGGLERS still in needs_snapshot after the grace period — one POST /books
+# per batch instead of one GET /book per token (the earlier version generated
+# ~16k 429 responses and ~4k 404s in 6h hammering dead tokens).
+# false = no REST repair (stale books stay blocked by
+# max_book_age_ms — fail-closed, strategies do not trade them).
+resync_on_reconnect = true
+# Period of the needs_snapshot sweep (ms).
+resync_sweep_ms = 2000
+# Time given to the WS to repopulate a pending token before requesting it
+# via REST (ms) — avoids duplicating the snapshot the resubscription already brings.
+resync_grace_ms = 1500
+# Maximum tokens per POST /books (the endpoint accepts up to 500).
+resync_batch_size = 400
+# Minimum interval between sweeper HTTP requests (ms) — global rate limit.
+resync_min_interval_ms = 250
+# Cooldown after a failed attempt per token (ms): base ×2 per failure up to the
+# ceiling — dead/404 tokens end up being requested at the ceiling cadence
+# instead of on every reconnect.
+resync_cooldown_base_ms = 5000
+resync_cooldown_max_ms = 300000
+# Grace period after clear_at before evicting from the registry (seconds).
+# >= max_sweep_secs + gtd_ttl_secs from post_close_sweep.toml (110+90=200 today) + margin,
+# or a late post-close-sweep fill finds the market already evicted and
+# `user_ws::handle_trade` silently drops it.
+# Previously 120 — insufficient.
+evict_grace_secs = 300
+# TTL (seconds) of the long-lived cache (clear_at_cache) that
+# survives the eviction of the working set above — a legitimate fill from the
+# CURRENT session arriving after evict_grace_secs (e.g. a late GTD from
+# post_close_sweep) still finds neg_risk/clear_at/token_ids here instead of
+# being dropped (live) or left in limbo with clear_at=0 (paper).
+# 24h: cheap to retain (minimal tuple per entry).
+clear_at_cache_ttl_secs = 86400
+# Minimum throttle between broadcasts of the same market (ms). 0 = no throttle.
+broadcast_throttle_ms = 50
+# Maximum age of a book (ms) for strategies to process it.
+# During WS gaps the last book stays frozen — do not trade on stale prices.
+# 3000→500 — a 3s-old book signs FOKs at dead prices in 45-90s windows.
+max_book_age_ms = 500
+# Per-market taker fee from the CLOB /fee-rate (public endpoint, no auth).
+# true = query it when discovering each new bracket and use it instead of the
+# constant; false = always use TAKER_FEE_RATE / taker_fee_rate.
+fetch_taker_fee = true
+# Window (seconds) of the trade tape (last_trade_price) used to accumulate
+# signed flow per token (registry::token_flow). 0 = disabled (the subscription
+# flag is not enabled and nothing is accumulated).
+tape_window_secs = 60
+
+# ── Discovery universes ───────────────────────────────────────────────────────
+# A universe = a set of discovery filters for market_feed. Each strategy's
+# `universe` field (config/strategies/<name>.toml, default in
+# code = ["crypto-updown-short","crypto-updown-long"]) decides which ones it trades in;
+# universes with scan=true are discovered and logged (target uni_scan) even if
+# no strategy declares them — pure scan phase, 0 orders.
+# If this block is missing (stale TOML), the bot synthesizes the two
+# crypto-updown-* from [market_feed] — see `Config::synthesize_default_universes`.
+[universes.crypto-updown-short]      # 5m/15m/1h — the current one (same as market_feed today)
+discovery          = "slug"
+slug_patterns       = ["btc-updown", "eth-updown", "sol-updown", "bnb-updown", "xrp-updown", "doge-updown"]
+end_date_max_hours  = 24
+has_oracle          = true
+scan                = false
+
+[universes.crypto-updown-long]       # daily/weekly (near-certain / near-expiry have room to breathe)
+discovery          = "slug"
+slug_patterns       = ["btc-updown", "eth-updown", "sol-updown", "bnb-updown", "xrp-updown", "doge-updown"]
+end_date_max_hours  = 200
+has_oracle          = true
+scan                = false
+
+[universes.crypto-multistrike]       # LadderArb/VolSurface — multi-strike markets
+discovery          = "tag"
+tag_slugs           = ["multi-strikes"]
+end_date_max_hours  = 200
+has_oracle          = true          # the asset is derived from the slug as well
+scan                = true          # scan: discovered and logged, no strategy trades it yet
+
+[universes.g-rw1]                    # G-RW-1: BTC 5m/15m only (52.5% of the pool)
+discovery           = "slug"
+slug_patterns       = ["btc-updown-5m", "btc-updown-15m"]
+end_date_max_hours  = 24
+has_oracle          = true
+scan                = false
+
+[universes.rewards-longdated]        # reward farming on non-updown markets (rewardsDailyRate>0)
+discovery          = "rewards"
+end_date_min_hours  = 24             # long-dated: nothing closing soon
+end_date_max_hours  = 0              # 0 = no ceiling
+has_oracle          = false
+scan                = true           # scan: discovered and logged, no strategy trades it yet
+
+# ── Global risk ───────────────────────────────────────────────────────────────
+[risk]
+# Maximum total exposure in USDC (sum of cost_basis of open positions).
+# Live ARB pilot: 500→20, adjusted to the account's real balance (21.89 pUSD).
+# Restore when funds are increased.
+max_total_exposure_usdc = "20"
+# Cap on net directional exposure per bracket (|YES − NO| in USDC).
+# Covered pairs net ≈ 0 and hedge legs are never blocked;
+# it only stops several strategies from stacking the same side of the same bracket.
+# 0 = disabled: no per-bracket limit, only the global one.
+max_bracket_usdc = "0"
+# Daily loss stop in USDC (REALIZED PnL only — sells and settlements;
+# an open position that sinks does not trigger the stop until it is closed).
+daily_loss_usdc_stop = "10"
+# In paper mode: ignore kill switches (lets calibrate run without the bot stopping).
+paper_disable_kill_switch = true
+# Cooldowns after losses (equivalent to Freqtrade's CooldownPeriod + StoplossGuard).
+# They only block ENTRIES (Buy) — sells, cancels and unwinds are never
+# affected. All at 0 = disabled (earlier behavior intact).
+# entry_cooldown_secs: after a losing exit on a bracket, blocks new
+# buys on that market_cid for N seconds.
+entry_cooldown_secs = 0
+# loss_strike + loss_strike_cooldown_secs: N consecutive losing exits of
+# a strategy pause its entries for M seconds. A winning exit
+# resets the streak. loss_strike=0 or cooldown=0 = disabled.
+loss_strike = 0
+loss_strike_cooldown_secs = 0
+# Simulated slippage in paper mode (bps over the entry price).
+paper_slippage_bps = 20
+# Correlation of the liquidity rejection between the legs of a YES+NO pair (submit_pair).
+# In live, post_orders evaluates both legs at the same instant → high correlation.
+# 1.0 = both fill or neither; 0.0 = independent draws (unrealistic, inflates orphan legs).
+# 0.9→0.97 — with 0.9 about 29% of the orphans in the calibration
+# were decorrelated liquidity draws, a sim artifact that does not
+# exist in live (simultaneous evaluation in the POST batch).
+paper_pair_fill_correlation = 0.97
+# Fill probability for FOK in paper (0.0-1.0). Default 0.75 simulates excessive rejection
+# for ARB (the second leg fails 25% and forces closing the first). 0.95 is more realistic
+# for liquid Polymarket markets with small orders.
+paper_fok_fill_rate = 0.82
+# Per-strategy override of the rate above (key = strategy name). With 1.0
+# that strategy's FOK is NOT drawn: it fills if and only if, after `paper_latency_ms`, the
+# book has enough depth at <= the limit price (the sim's `walk_buy`).
+# arb_15m5m: its pre-registered criterion measures the % of streaks with BOTH legs filled; a
+# random rejection (0.82, correlation 0.97) would invent exactly that number. The other
+# strategies do not change. `paper_latency_ms` is not set here: the config.rs default applies (150 ms).
+paper_fok_fill_rate_per_strategy = { arb_15m5m = 1.0 }
+# Chaos sim: probability that an ACCEPTED submit returns
+# `unknown` in paper — exercises the Unknown journal/mirror/reconciler
+# end-to-end as if the CLOB ACK had been lost. 0.0 = deterministic.
+# Raise it ONLY in calibration/stress runs (extra noise in the paper PnL).
+paper_unknown_rate = 0.0
+# Initial capital in paper. Recorded automatically on first startup (deposits_total=0).
+paper_initial_deposit_usdc = "1000"
+
+# ── HTTP API ──────────────────────────────────────────────────────────────────
+[api]
+# Bind of the HTTP administration interface.
+bind = "127.0.0.1"
+port = 8766
+# Bearer token for the API. Empty = no authentication (only if bind=loopback).
+token = ""
+
+# ── Passive post-close observer ───────────────────────────────────────────────
+# Not a strategy: it emits no orders, it only samples books after the bracket
+# closes (clear_at) to measure how long the winning side takes to correct.
+[post_close]
+enabled = true
+# sample_throttle_ms = 1000
+
+# ── Market analytics recorder (read-only) ─────────────────────────────────────
+# Records every 1s the complete book (YES and NO bids+asks) of each asset market
+# in a DB SEPARATE from db_path (StateStore). Not a strategy: it emits no
+# orders and does not go through RiskGuard/executor. Input for future backtesting.
+[analytics]
+# `enabled` lives in config/strategies/analytics.toml — that is where the
+# API/Telegram toggle persists it (like the rest of the tools).
+db_path = "hrf_market_analytics.sqlite"
+# retention_hours: maximum age (in hours) of a book_snapshots row
+# before it is purged. 0 = NO RETENTION (never deleted, unbounded growth
+# — only for one-off debugging, do not leave it like this in real operation). With the
+# measured growth of 4-8 GB/day (depth already capped at 15 levels +
+# content-hash dedup), 72h (3 days) bounds the steady-state size
+# to ~12-24 GiB instead of growing without limit.
+retention_hours = 72
+# purge_interval_secs: how often (seconds) a purge cycle runs. Its OWN
+# cadence, independent of the 1s tick that records snapshots — the purge never
+# runs on the write path, so it does not block the recorder.
+purge_interval_secs = 600
+# purge_batch_size: rows per batch in each purge DELETE, to avoid opening a
+# giant transaction or blowing up the WAL with one massive delete.
+purge_batch_size = 5000
+
+# ── Spot/oracle series for research (src/tools/recorders/spot_stream.rs) ──
+# Records one sample per spot (binance) CHANGE for each oracle asset
+# in a separate DB, distinct from StateStore and from the book
+# analytics. The [analytics] book dedup deliberately excludes spot — a stable
+# book hides the movement of the underlying, which is exactly what
+# this series captures. Read-only: never emits orders or touches
+# RiskGuard/executor; samples that do not fit in the channel are dropped
+# (try_send) without affecting trading. The path carries the mode suffix
+# (_paper/_live), like the other DBs.
+[spot_stream]
+# `enabled` lives in config/strategies/spot_stream.toml (API/Telegram toggle).
+db_path = "hrf_spot_stream.sqlite"
+# channel_capacity: in-flight samples producer→writer before dropping.
+# 4096 ≈ ~5 min of slack at ~12 samples/s (6 assets × 2 sources × 1 tick/s).
+# channel_capacity = 4096
+
+# ── Causal research event recorder (research_events.rs) ─────────────────────
+# Records the RAW event flow (Polymarket WS, REST resync, Binance ticks,
+# derived spot, executor OrderSubmit) as JSONL under `dir` — a causal
+# ledger for replay/training. Read-only on the flow: the hooks use
+# try_send and an event that does not fit is dropped and counted (gap in the seq),
+# never blocking trading. A failure to create `dir` does not abort startup.
+# `enabled=false` by default: it is disk volume on the hot path.
+# `record_tape=true` forces `custom_feature_enabled` in the WS subscription
+# to capture `last_trade_price` even if no strategy uses the tape —
+# NOTE: the flag also enables best_bid_ask/new_market/
+# market_resolved and multiplies the per-connection traffic.
+[research_events]
+# `enabled` lives in config/strategies/research_events.toml (API/Telegram
+# toggle).
+dir = "data/research_events"
+# channel_capacity = 8192     # envelopes producer→writer before dropping
+# dedup_capacity = 262144     # FIFO window of the writer's dedup keys
+# record_tape = false        # forces the trade tape in the WS subscribe
+
+# ── Official resolution fetcher (src/tools/recorders/resolution.rs) ──
+# Sweeps observed markets already closed without a `confirmed` label and queries Gamma
+# by slug; the official result enters through research_labels::apply_fetch
+# (provisional → confirmed; correction → atomic supersede). Never invents
+# a winner: an inaccessible/ambiguous fetch leaves the market pending. Read-only
+# HTTP + label writes — it does not trade or touch RiskGuard/executor.
+[resolution_fetcher]
+# `enabled` lives in config/strategies/resolution_fetcher.toml (API/Telegram
+# toggle).
+# poll_secs = 120            # interval between full sweeps
+# min_request_ms = 400       # spacing between Gamma requests (polite rate limit)
+# batch_size = 50            # maximum markets per sweep (most recently closed first)
+# pending_horizon_days = 30  # markets with older clear_at leave the set
+                             # (those that never resolve cannot hog the batch)
+
+# ── Shadow observer of the numeric model (model_observer.rs) ──────────────────
+# Loads the versioned artifact (`artifact_dir/manifest.json` +
+# `model.json`, validated by schema and manifest sha256) and evaluates each
+# fresh book against the current spot: records the prediction + a VIRTUAL
+# decision (or an abstention with reason) in `decisions_dir/*.jsonl`. The
+# latency budget is derived from the signal horizon
+# (`signal_horizon_ms/10` if `latency_budget_ms=0`), NEVER from the
+# bracket length; exceeding it produces a `latency_exceeded` abstention.
+# PURE OBSERVER: its context carries no intents channel or RiskGuard —
+# it cannot emit orders by construction, and NO gate enables it for
+# live automatically. An invalid artifact only disables the observer
+# (log error); the bot starts anyway.
+#[model_shadow]
+#enabled = false                # research opt-in — false by default
+#artifact_dir = "research/data/t8b_confirmed/model"
+#decisions_dir = "data/model_shadow"
+#signal_horizon_ms = 30000     # useful life of a prediction
+#latency_budget_ms = 0    # 0 = horizon/10 (minimum 1ms)
+#markets = []                  # condition_ids in scope; empty = all
+#assets = []                   # slug prefixes ("btc","eth"…); empty = all
+#edge_min = 0.02                # minimum p − ask to trigger a virtual buy
+#shares_virtual = 1             # accounting size of the record (does not reserve cash)
+#channel_capacity = 4096        # observer→writer queue (try_send, non-blocking)
+#min_decision_interval_ms = 1000  # minimum cadence per market
+#stats_interval_secs = 60       # cadence of stats lines (p50/p95/p99)
+
+# ── On-chain redemption (redeem.rs) ──────────────────────────────────────────
+# Only applies to live with `risk.auto_redeem = false` (EOA account, no magic/proxy):
+# the orphan checker calls the CTF's `redeemPositions` on Polygon BEFORE
+# settling the REDEEM in the DB — if the tx fails, the position stays pending and the
+# next poll retries it. With auto_redeem=true or in paper this section
+# is not used. In live with auto_redeem=false startup ABORTS without rpc_url
+# (fail-closed: with no way to collect, nothing is traded).
+[redeem]
+# rpc_url: HTTPS endpoint of a Polygon RPC (Infura/Alchemy/own).
+# rpc_url = "https://polygon-mainnet.g.alchemy.com/v2/<key>"
+# collateral: USDC.e by default; only touch for testnet.
+# collateral = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"

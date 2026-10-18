@@ -1,0 +1,72 @@
+# ── ARB strategy (parity arbitrage) ───────────────────────────────────────────
+# Buys YES + NO when yes_ask + no_ask < 1 − fee_threshold.
+# Both legs are sent with a shared hedge_id.
+
+[arb]
+enabled = false
+
+max_orders_per_hour = 0
+max_order_usdc = "10"
+daily_loss_usdc_stop = "8"
+
+# Historical calibration (n=43 trades):
+#   Trades with edge < 4.5% were marginal → reference edge ≈ 4.5%.
+#   Kelly sizing: size ∝ edge/edge_reference (half Kelly = 0.5 × max_order_usdc at edge=0.025).
+#   Kelly is not implemented; sizing is a fixed max_order_usdc.
+
+# Polymarket taker fee rate: fee = rate × min(p, 1−p) per leg.
+# The pair fee is computed EXACTLY from the asks of each signal (≈5¢ at p=0.5, ≈0.1¢
+# at the extremes). 0.10 = 1000 bps, the value returned by GET /fee-rate?token_id= for
+# the up/down brackets (and also the contract's MAX_FEE_RATE_BIPS).
+# Previously: 0.07 with a p×(1−p) formula — it UNDERESTIMATED the fee ~2x in the mean zone, which is
+# exactly where ARB operates. The 1-3¢ edges ARB chased do not cover a 5¢ fee at
+# p≈0.5: review min_edge_after_fee before re-enabling the strategy.
+taker_fee_rate = "0.10"
+# ADDITIONAL flat margin over the exact fee (it used to approximate the fee — no longer
+# needed). 0 = no extra cushion.
+fee_threshold = "0"
+# Minimum edge after fees.
+min_edge_after_fee = "0.005"
+# Maximum size in shares, summing both legs. 0 = no cap; the limit is max_order_usdc.
+max_size_shares = "0"
+# Seconds without a fill of the orphan sell before retrying (time deadline;
+# it used to be 15 ticks — under coalescing N ticks do not guarantee real time).
+orphan_sell_retry_secs = 10
+# Seconds after one leg's fill before treating it as an orphan (covers
+# the async arrival of the opposite fill via user_ws). Once confirmed, all
+# bails are armed — before there were 20 blind ticks with no stop.
+orphan_confirm_secs = 2
+# Maximum tolerable bid-ask spread on EACH leg at entry. 0 = no filter.
+# Wide spread → higher orphan-bail risk. 0.10 gives room for less liquid markets
+# (sol, xrp, doge) without entering completely empty books.
+# Reduced 0.05→0.10: the previous limit silently blocked brackets with a normal
+# spread of 6-9 cts (see hrf_arb_skip_spread_total at :9090/metrics to calibrate).
+max_bid_ask_spread = "0.10"
+# Slippage tolerated on BOTH legs: each FOK is signed at ask + leg_slippage
+# and the edge must cover 2×leg_slippage. Margin between the WS read and the POST to the
+# CLOB (~100-300ms). Before, only NO carried slippage and YES died on 1 tick
+# of movement (NO orphans).
+# 0.01→0.02 — in the calibration 71% of the rejections of the
+# 2nd leg were "price moved during latency" (1 tick does not cover the typical
+# drift of a 1-min bracket); the edge gate (arb.rs, 2×leg_slippage)
+# guarantees each completed pair still has a positive edge.
+leg_slippage = "0.02"
+# Hard stop-loss for orphan legs — sell if the bid falls below
+# entry × (1 − pct). The trailing stop only takes profits (it requires bid > entry);
+# without this the losing orphan had no exit until the oracle bail (−2%)
+# or the time bail (30s before close). 0 = disabled.
+orphan_stop_loss_pct = "0.05"
+# Minimum remaining bracket time to enter (previously hardcoded 10s).
+# In the live pilot all 5 entries were on books collapsing near
+# expiry (pairs completeness 0/5) — the parity "edge" was the collapse
+# of the losing side, not real arbitrage.
+min_remaining_secs = 60
+# Safety factor over the depth at the best ask — only depth/factor shares are taken,
+# requiring twice the visible liquidity we consume. A thin quote that
+# disappears before the POST cannot fill us.
+depth_safety_factor = "2"
+# Maximum credible edge. In live an "edge" of 0.39 appeared
+# after a WS reset: part of the book was dead and the phantom ask
+# never filled (FOK with no counterparty → orphan). Real edges are 1-3 cts;
+# above 0.10 it is a broken book, not an opportunity. 0 = no filter.
+max_plausible_edge = "0.10"

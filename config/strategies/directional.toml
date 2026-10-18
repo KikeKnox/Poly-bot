@@ -1,0 +1,29 @@
+# ── Directional (DIR) strategy ────────────────────────────────────────────────
+# Only enters when ask ∈ [min_entry_price, max_entry_price].
+# Confirmed profitable bucket: 0.65–0.75 (68% WR, +EV).
+# Relaxed for calibration: range [0.55,0.80], edge 3%→2%, window 60→90s.
+# Restore [0.65,0.75] / 3% if calibration shows negative EV outside that bucket.
+# Live gate: n≥100 trades in paper with WR > average ask.
+#
+# DIR has NO stop-loss or bail — it buys and locks in permanently.
+# With the relaxed range [0.55,0.80] a losing position rolls to 0 with no exit.
+# KEEP enabled=false until (a) the signal is redesigned (60s momentum is a
+# weak predictor, EV −1.20/trade at n=43) AND (b) a real bail is added.
+# The bail was deliberately not implemented: it would be dead code on an invalid signal.
+
+[directional]
+enabled = false
+
+max_orders_per_hour = 0
+max_order_usdc = "40"
+daily_loss_usdc_stop = "80"
+# Maximum size in shares per order. 0 = no cap; the limit is max_order_usdc.
+max_size_shares = "0"
+
+fair_value_min_edge = "0.02"
+max_entry_price = "0.80"
+min_entry_price = "0.55"
+decision_window_secs = 90
+# Maximum tolerable bid-ask spread on entry. 0 = no filter.
+# 0.10 avoids entering low-liquidity brackets where the spread reflects high uncertainty.
+max_bid_ask_spread = "0.10"

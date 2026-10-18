@@ -1,0 +1,19 @@
+# ── Ladder Arb strategy (bracket vs bracket) ──────────────────────────────────
+# Parity arbitrage between brackets of the same asset and expiry but a different
+# strike. Prior gate: >= 1 week of scanning with real slugs confirming volume.
+# If the scan does not confirm an edge, delete this file.
+
+[ladder_arb]
+enabled = false
+
+# Trading limits
+max_orders_per_hour = 0
+max_order_usdc = "60"
+daily_loss_usdc_stop = "60"
+
+# Effective CLOB fee.
+fee_threshold = "0.02"
+# Minimum edge after fees.
+min_edge_after_fee = "0.008"
+# Maximum size per leg in shares.
+max_size_shares = "8"

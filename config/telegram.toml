@@ -1,0 +1,14 @@
+# ── Telegram bot ────────────────────────────────────────────────────────────────
+# User identity values go in .env:
+#   TELEGRAM_BOT_TOKEN=123456789:AAAA...
+#   TELEGRAM_ALLOWED_IDS=123456789          # your user ID (see @userinfobot)
+#
+# Only the bot's behavior parameters go here.
+
+[telegram]
+# Fill notifications: can be muted live with /mute on|off.
+fill_alerts = true
+
+# Automatic periodic summary: equity, PnL of the day, open positions.
+# 0 = disabled.
+periodic_summary_hours = 4

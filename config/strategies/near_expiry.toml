@@ -1,0 +1,71 @@
+# ── Near-Expiry (NE) strategy ─────────────────────────────────────────────────
+# Oracle-driven: buys the winning side when the price/strike distance exceeds
+# the threshold and the bracket is in the final time window.
+
+[near_expiry]
+enabled = false
+
+# Trading limits
+max_orders_per_hour = 0
+max_order_usdc = "30"
+daily_loss_usdc_stop = "80"
+
+# Entry signal
+# Minimum distance between the current price and the reference price as a percentage
+# (dist_pct = |live - ref| / ref * 100; e.g. 0.2 = BTC must have moved 0.2% since the window).
+# Relaxed 0.5→0.2 for calibration; restore if WR < average ask.
+# 0.2→0.1 PROVISIONAL while the reference capture is audited — 100% skips in 12h with exp_move p50=42bps is incompatible with the threshold; candidate cause: reference captured late
+# 0.1→0.05 — with the real median sigma
+# (48h of 1s klines, 6 assets) 0.1% sits above the D_max of all 6 assets at max_ask=0.90;
+# a signal never reached the ask gate. 0.05% sits below D_max for 4/6 (BTC and BNB
+# remain almost mute, a known and accepted limitation — option A, a net-EV gate, would solve it
+# but means rewriting the gate, not just the threshold).
+min_dist_pct = "0.05"
+# Final window: only enters if between min_lead_secs and window_secs remain until the close.
+# Widened 45→60s to see more entries during calibration.
+window_secs = 60
+# 5→15 — at t<15s the winning side's ask is already at
+# ~0.99 in any scenario with a real signal (D_max(BTC,5s)=0.0087%), and the bail-sell has no
+# time to execute if the thesis reverses.
+min_lead_secs = 15
+# Minimum entry price (implicit minimum-liquidity filter).
+min_ask = "0.60"
+# Maximum entry price.
+# 0.97→0.90 — in the calibration the ≥0.90 bucket (6 of 16
+# entries, avg 0.95) had WR 83.3% when it needs >95% for +EV; the buckets
+# <0.90 together are slightly +EV (WR 77.8% vs avg ask 0.762).
+max_ask = "0.90"
+# Order size in USDC.
+order_usdc = "25"
+# Maximum size in shares per order. 0 = no cap; the limit is order_usdc.
+max_size_shares = "0"
+
+# Bail if the underlying reverses more than this % BELOW the oracle
+# reference (same unit as min_dist_pct: 0.05 = 0.05%). The code used to compare a
+# fraction against 0.20 (=20% in 45s) → inert bail due to a units bug.
+# With entry at dist ≥ 0.2%, a reversal that crosses 0.05% to the other side of the
+# reference invalidates the thesis — sell instead of holding to expiry.
+bail_threshold_pct = "0.05"
+
+# Minimum bid to execute the bail-sell. If the best bid is below this value, we do not bail
+# (selling into a dry market in the last 45s can be worse than hold-to-expiry).
+min_bail_bid = "0.10"
+# Maximum tolerable bid-ask spread on entry. 0 = no filter.
+# Wide spread = illiquid or very uncertain market — better not to enter.
+max_bid_ask_spread = "0.08"
+# FAK (Fill-And-Kill): fills the available depth and cancels the rest.
+use_fak = false
+
+# Volatility
+# Filter if sigma is below this level (market too quiet = weak signal).
+# 0.0001 → 0.000023 (previous value calibrated against the broken per-tick
+# EWMA σ̂, which overestimated 5-10x; with realized_vol_per_sec
+# the old threshold is almost never exceeded and NE silently switches itself off).
+# 0.000023→0.000015 — measured over 48h of
+# real realized sigma: with 2.3e-5, BTC falls below 28.6% of the time and BNB 23.3%
+# (the two most liquid assets switched off for part of the day). 1.5e-5 only excludes BTC's p10.
+min_sigma_for_entry = "0.000015"
+
+# Seconds before giving up on an in-flight bail-sell and allowing a retry.
+# Time deadline (not ticks) — must exceed the async latency of user_ws.
+bail_retry_secs = 10

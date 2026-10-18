@@ -1,0 +1,157 @@
+# ── Parity Maker (PM) strategy ────────────────────────────────────────────────
+# Places simultaneous GTD bids on YES and NO with sum <= 1 - margin.
+# Adds a periodic requote to correct adverse selection.
+# Gate: markout >= 0 bps at 5s after the redesign.
+
+[parity_maker]
+enabled = false
+
+# Trading limits
+max_orders_per_hour = 0
+max_order_usdc = "30"
+daily_loss_usdc_stop = "60"
+
+# Signal: minimum required parity margin.
+# Seconds with only one leg filled before giving up — cancels the other GTD
+# and sells the excess (taker). Without this PM ended up directional with no exit (WR 28.6%).
+# 0 = disabled. While waiting, the requote tries to complete the pair.
+single_leg_unwind_secs = 10
+# Minimum bid for the unwind (with dust bids there is nothing to salvage).
+min_unwind_bid = "0.05"
+
+# Only places if yes_bid + no_bid <= 1 - margin.
+# margin is the edge of the box — PM bids the full box at 1 − margin (0.96)
+# and earns margin per completed pair.
+margin = "0.04"
+# Minimum price of each leg to enter (avoid fills at negligible prices).
+# BUY markout by price bucket is monotonic:
+# <0.50 = -1171/-3000 bps; >=0.50 = -664/+110 bps. Raised from 0.20 to 0.40.
+min_leg_price = "0.40"
+
+# Size in shares.
+order_size_shares = "3"
+
+# Requote: cancel and resend if the mid moved more than N bps.
+requote_threshold_bps = 150   # 20 bps (0.002) was FINER than the book tick (0.01 → mid 0.005): requote on every tick
+# Maximum TTL of an order pair before a forced requote (seconds).
+pair_ttl_secs = 10
+# Requote tolerance (order refresh tolerance): if the resting bid of a leg
+# is at most N ticks from the desired price, that leg is NOT cancelled+reposted.
+# It never keeps an invalid pair: the sum of what remains resting must still be
+# <= 1 - margin. An unwanted leg (drift, fv_no_quote, unwind) is not
+# kept either. 0 = disabled (previous behavior).
+requote_tolerance_ticks = 0
+
+# FV skew: biases the price toward the favored leg (parity-neutral). 0 = off.
+fv_skew_threshold = "0.08"      # minimum |FV-0.5| to skew (below it sigma noise dominates)
+fv_skew_bps = 100               # shifts each leg's bid by ±0.01
+fv_no_quote_threshold = "0"      # ARM B: no disguised directional exposure — PM ALWAYS quotes both legs  # |FV-0.5| >= this: do not quote the disfavored leg
+# Pause if sigma_short/sigma_long exceeds the ratio (informed move). 0 = off.
+# 3.0 → 1.6 (with the broken σ̂ the trigger probability at 3.0
+# was 0.00%; 1.6 ≈ p99 of the rv60/rv300 ratio with the new estimator).
+vol_ratio_threshold = "1.6"
+# Smart single-leg unwind (FV_ret = model probability that the retained leg wins)
+unwind_hold_fv = "0.60"         # >=: hold to settlement, do not sell taker
+unwind_dump_fv = "0.40"         # <=: dump taker; in between: maker re-post if there is time
+unwind_repost_min_secs = 60     # minimum remaining time to re-post a maker ask
+unwind_maker_edge = "0.01"      # re-post ask = avg_entry + this
+
+# The hold-vs-dump unwind is decided with the oracle spot (Binance,
+# the bot's only price source) and the unwind_hold_fv/unwind_dump_fv thresholds.
+
+# DIRECTIONAL ORACLE GATE — the root fix for adverse selection.
+# The fv_no_quote above looks at the FV LEVEL, and the level cannot tell a toxic
+# fill from a benign one. What poisons is the MOVEMENT of the underlying:
+#   quiet spot + falling book    → impatient seller → quote (a maker lives off this)
+#   running spot + lagging book  → informed flow    → withdraw the doomed leg
+# Measured without this gate: buy markout -1293 bps at 5s.
+oracle_drift_secs = 10   # window over which the spot movement is measured. 0 = off
+oracle_drift_bps  = 5    # |underlying move| that marks "informed"
+
+# ENTRY BARRIER — "is there any split left in this bracket?".
+# The losing leg does not sink because the spot moves: it sinks because the CLOCK
+# runs (at expiry the FV converges to 0/1 and the losing token falls by itself).
+# Calibration, buy markout at 5s by remaining time:
+#   >240s to close: -820 bps   → 19/23 brackets complete the box (83%)
+#   60-120s:        -1841 bps
+#   <60s:           -4622 bps   → 2/5 complete the box
+#
+# The barrier is NOT a threshold in seconds (that would only hold for the day's sigma
+# when it was measured): it is the move left for the underlying, sigma*sqrt(t), in bps.
+# Below it the bracket is decided: the price no longer moves, there is no flow
+# to complete the box, and all that remains is for the loser to fall. It adapts on its own to
+# volatility and bracket duration.
+# Outside the barrier nothing is OPENED, but a box already started is still completed.
+# 20 → 5 (calibrated against the broken σ̂; median of em_900 with
+# the new σ̂ is 7.7-21.9 bps — with 20 the gate almost never opened).
+min_expected_move_bps = 5
+
+# SPREAD GATE — the cheapest filter of all.
+# The spread is the maker's premium: at 1c there is no room for an impatient seller
+# to cross down to our bid, so the only flow that arrives is the
+# informed one. Without spread there is no business, only adverse selection.
+# It only blocks OPENING; completing a started box passes through it. 0 = off.
+min_spread = "0.02"
+
+# QUEUE AND DEPTH — "will I get filled, and in a balanced way?".
+# Effective queue of a leg = shares of bids at price >= ours (those that
+# fill first). Two uses:
+#   · absolute:   a bid behind a lot of liquidity never fills.
+#   · asymmetric: if one leg has much more queue than the other, the other fills
+#     alone and this one does not → the box is born orphaned (-11c) instead of completed (+4c).
+# They only block OPENING. 0 = off in both.
+max_queue_ahead_shares = "500"   # absolute queue ahead above which nothing is opened
+queue_imbalance_ratio  = "5"     # max_queue > ratio * min_queue → unbalanced box guaranteed
+
+# COMMON vs IDIOSYNCRATIC MOVE — the signal that separates the two flows.
+# All the updown brackets of an asset share the underlying:
+#   · ALL move at once  → the spot moved → INFORMED flow → the leg
+#     opposite to the move is doomed: withdraw it NOW.
+#   · ONLY this book moves → IDIOSYNCRATIC flow (impatient seller) →
+#     exactly the flow a maker lives off: quote.
+# Looking at the Binance spot tried this and did not move the needle (the book goes at
+# its own pace). This signal looks at the books, which is where the fill happens.
+# Without sibling brackets with data the signal stays inert (does not block). 0 = off.
+xbracket_window_secs  = 5      # comparison window
+xbracket_move_bps     = 100    # minimum own move to evaluate (100 = 1 probability point)
+xbracket_common_ratio = "0.5"  # a sibling "agrees" if it replicates >= 50% of the own move, same sign
+
+# CHASING THE MISSING LEG.
+# With a single leg in the portfolio, every second without completing brings the orphan closer (-11c,
+# measured) versus the +margin (4c) the box pays. The residual budget
+# is a CEILING: bidding up to it leaves the box at exactly 1 - margin, i.e. the
+# configured margin in full. Quoting below the ceiling only earns EXTRA margin if the fill
+# also arrives — and when the probability of completing falls, that extra is a
+# losing bet against 11 cents. So it is given up and the bid goes to the ceiling.
+# It fires on (a) unbalanced time, (b) the entry barrier closed, or (c) the missing leg
+# getting more expensive (the retained one is doomed).
+# MUST be < single_leg_unwind_secs (10) or the unwind resolves first and never acts.
+chase_after_secs = 3   # 0 = chase off
+
+# BURNED BRACKET. An unwind dump (forced sell of the losing leg) is
+# evidence of toxic flow: the loser got filled and the winner did not arrive. Reopening
+# that bracket means buying the loser again. Measured (1h clean run): ALL
+# of PM's loss was in the unwind SELLs (-$21.93); boxes held to
+# settlement won (+$1.08), and 5 brackets with 6+ re-entries concentrated half of
+# the bleeding. After N dumps the bracket is not reopened. It only blocks OPENING (never completing
+# a started box). Updown brackets live ~5 min: burning one after the first dump barely
+# costs any opportunity. 0 = off.
+max_dumps_per_bracket = 1
+
+# BRACKET HISTORY — does this (asset, duration) tend to resolve as a
+# box or as an orphan? The diagnosis found no price feature that separated boxes
+# from orphans ex-ante; this keeps the last N results per bucket (asset+duration)
+# so calibration can mine a directional or streak bias. Read/record only — does not change
+# PM's behavior. 0 = disabled (does not accumulate, hist_* fields empty in the log).
+# bracket_history_len = 20
+
+# DURATION GATE — do not OPEN a new box in brackets with duration < pm_min_duration_secs.
+# Excludes the 5-minute (300s) brackets: their clock barrier leaves them orphaned far more
+# often than the 15-minute (900s) ones. Mining: duration AUC 0.774,
+# median 900s in complete boxes vs 300s in orphans. It only blocks OPENING;
+# completing a started box passes through it (same pattern as
+# min_expected_move_bps). Unknown duration (market_open_ts not populated) never
+# blocks. 0 = disabled.
+# Goal: BUY markout from -1174 -> >= -400 bps, box ratio >= 60%.
+# Revert if the markout does not improve by >= 300 bps with n >= 80 boxes.
+pm_min_duration_secs = 900

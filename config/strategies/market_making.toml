@@ -1,0 +1,54 @@
+# ── Market Making (MM) strategy ───────────────────────────────────────────────
+# Quotes bid/ask around the fair value. Only active if:
+# 1. The unified executor is in place (always).
+# 2. SimulatedRouter models queue + latency (always).
+# 3. >= 48h of paper calibration with markout >= 0 bps at 5s.
+
+[market_making]
+enabled = false
+
+# Trading limits
+max_orders_per_hour = 0
+max_order_usdc = "20"
+daily_loss_usdc_stop = "50"
+
+# Spread in bps around the FV (bid = fv - spread/2, ask = fv + spread/2).
+# Raised 30→150 after calibration: adverse selection in binary markets requires a wide spread.
+spread_bps = 150
+# Minimum allowed spread (do not quote tighter than this).
+min_spread_bps = 50
+# Maximum spread (widen if volatility is high).
+max_spread_bps = 300
+# Volatility spread adjustment: spread += vol_factor * sigma_bps.
+vol_factor = "1.5"
+
+# Order size in shares.
+order_size_shares = "5"
+# Maximum inventory per side (YES or NO) before stopping quoting that side.
+# Lowered 50→10 after calibration: accumulating 50 shares amplifies adverse-selection losses.
+max_inventory_shares = "10"
+
+# Requote: cancel and resend if the mid moved more than N bps.
+requote_threshold_bps = 15
+# Maximum TTL of an order before a forced requote (seconds).
+order_ttl_secs = 5
+# Requote tolerance (order refresh tolerance): if the resting bid of a leg
+# is at most N ticks from the desired price, that leg is NOT cancelled+reposted.
+# Reduces cancel/post churn (noise, involuntary fills, rate limit).
+# 0 = disabled (previous behavior: requote whenever the threshold is crossed).
+requote_tolerance_ticks = 0
+
+# Adverse selection filter.
+# Pause quotes if sigma_short/sigma_long > this ratio (vol spike = informed move).
+# 0 = disabled.
+# 1.5 → 1.6 (calibrated against the broken σ̂; 1.6 ≈ p99 of the
+# ratio with the new estimator, realized_vol_per_sec — it had never been validated).
+vol_ratio_threshold = "1.6"
+# Minimum bid-ask spread to quote. Below it there is no margin for MM.
+# 0 = disabled. Enable with the value observed in paper calibration.
+min_spread_to_quote = "0.01"
+
+# Liquidate the inventory on leaving the window (remaining ≤ 30s) instead of
+# holding it to settlement (cause of the −$716 in one calibration). It only sells if
+# the bid ≥ min_unwind_bid — with dust bids there is nothing to salvage.
+min_unwind_bid = "0.05"

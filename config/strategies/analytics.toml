@@ -1,0 +1,10 @@
+# Analytics — market analytics collector (recorder, read-only).
+#
+# Records every 1s the full book (bids+asks of YES and NO) of each active market
+# in a SQLite DB SEPARATE from StateStore. It emits no orders and does not go through
+# RiskGuard/executor. The remaining parameters (db_path, retention, purge) live
+# in the [analytics] section of config/general.toml — `enabled` lives HERE
+# because it is what the live toggle (API/Telegram) persists.
+
+[analytics]
+enabled = true

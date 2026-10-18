@@ -1,0 +1,31 @@
+# ── ARB-15M5M strategy (basket of 15m + 5m of the same asset and same close) ───
+# Buys Up/Down of the two markets according to the order of their Chainlink
+# TWAP-60 s strikes (the basket always pays >= 1) when the cost with fees is < 1 − min_margin.
+# Needs POLY_API_KEY/SECRET/PASSPHRASE in .env: without them there is no strike feed
+# (oracle::chainlink_twap) and the strategy does not trade.
+
+[arb_15m5m]
+enabled = false
+
+max_orders_per_hour = 0
+# Cap on the cost of ONE basket (both legs together).
+max_order_usdc = "25"
+daily_loss_usdc_stop = "20"
+
+# Minimum margin per share after fees: it buys while marginal_cost < 1 − min_margin.
+min_margin = "0.01"
+# Below this many shares it does not trade (and each leg must add up to >= 1 USDC).
+min_size_shares = "5"
+# Cap on shares per basket (0 = only liquidity and max_order_usdc).
+max_size_shares = "100"
+# Stops trading this many seconds before the common close.
+close_s = 5
+# Minimum wait between two submissions of the same pair.
+cooldown_ms = 2000
+# Orphan leg (one FOK filled and the other did not): "hold" = keep to resolution (the
+# pre-registered choice) | "sell" = one sell attempt at the bid of the filled leg.
+orphan_policy = "hold"
+
+# Only needs the 5m and 15m: without this it inherits ["crypto-updown-short","crypto-updown-long"] and also subscribes
+# the daily and weekly up/down markets over WS (unused CPU and network).
+universe = ["crypto-updown-short"]

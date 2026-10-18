@@ -1,0 +1,57 @@
+# ── Near-Certain (NC) strategy ────────────────────────────────────────────────
+# Buys the near-winning side when the z-score exceeds the threshold.
+
+[near_certain]
+# Disabled: WR 73.7% (42W/15L, n=57) is below the breakeven required by
+# its payout structure given the average entry price — confirmed -EV, not a calibration issue.
+enabled = false
+
+max_orders_per_hour = 0
+# 50→25 during calibration — with n=2 trades in 4h (scarce signal by
+# design), a single loss of −$50.77 dominates the PnL; half the size = the same
+# information per trade at half the risk while the sample grows.
+max_order_usdc = "25"
+daily_loss_usdc_stop = "100"
+# Maximum size in shares per order. 0 = no cap; the limit is max_order_usdc.
+max_size_shares = "0"
+
+# z_threshold: oracle displacement in sigmas above the market's implied z.
+#   z_oracle = (live-ref)/ref / (sigma_60s × √remaining)
+#   FV = Φ(z_oracle)  — Black-Scholes fair value of the bought side
+#   z_implied_ask = Φ⁻¹(ask) ≈ Φ⁻¹(max_ask) = Φ⁻¹(0.87) ≈ 1.13
+#
+# z_threshold must be > Φ⁻¹(max_ask) = 1.13 for the oracle to be AHEAD of the market.
+# With z_threshold=2.5 and max_ask=0.87 the condition is never met (the market would have
+# repriced to ask≈0.99 before the oracle reaches z=2.5).
+#
+# Relaxed for calibration (goal: see entries, adjust with data).
+# z=1.1 → FV≈Φ(1.1)=0.864; max ask=0.91 → minimum edge ~-5% (calibrate with real WR).
+# Restore z=1.3, range [0.82,0.87] if calibration confirms negative EV in wide buckets.
+# 1.1→1.0 PAPER-ONLY — the max z observed in 12h was 1.096 (0 signals); it generates n for the empirical table. It does not enable live: fee-adjusted edge ≈0 at z=1.0
+z_threshold = "1.0"
+window_secs = 120
+min_ask = "0.78"
+max_ask = "0.91"
+# With 0.5, 94.4% of the candidates that DID exceed
+# z_threshold died here (1.052/1.114) — it was the real bottleneck, not
+# z_threshold as first believed.
+# 1.5 is a provisional, reasoned value, NOT validated against the real distribution of
+# od/fd (the skip did not log those values) — instrument it before trusting the
+# result of the next calibration.
+min_book_imbalance = "1.5"
+# Bail if the underlying reverses more than this % BELOW the oracle reference
+# (e.g. 0.04 = bail if BTC falls >4% below the reference price on entering the window).
+bail_threshold_pct = "0.04"
+# Minimum bid to execute the bail-sell. If the bid is lower, hold-to-expiry (better than selling at $0.01).
+min_bail_bid = "0.10"
+# Maximum tolerable bid-ask spread on entry. 0 = no filter.
+# 0.05 avoids entering illiquid brackets where a wide spread implies uncertainty.
+max_bid_ask_spread = "0.08"
+# FAK (Fill-And-Kill): fills the available depth and cancels the rest.
+# false = FOK (all or nothing). Enable if the market usually has depth < max_order_usdc/ask.
+use_fak = false
+
+# Seconds before giving up on an in-flight bail-sell and allowing a
+# retry. Time deadline (not ticks): must exceed the async latency
+# of user_ws in live (700ms-2s).
+bail_retry_secs = 10

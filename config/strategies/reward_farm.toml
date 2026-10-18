@@ -1,0 +1,67 @@
+# RewardFarm — Liquidity Rewards farming (scan + real posting).
+#
+# Polymarket pays a daily pool (in pUSD) to whoever keeps limit orders within the
+# scoring band around the mid (score = size x quadratic price factor;
+# two-sided quoting is mandatory if the mid leaves 0.10-0.90; it pays even if the order
+# never fills). RF is a FILL-AVOIDANCE strategy, not a spread-capture one:
+# a toxic fill (~-1326 bps measured in PM) erases weeks of rebate, so
+# posting is done at the EDGE of the band (minimum score, minimum fill risk), a
+# single level per side, and withdrawn on any sign of toxic flow.
+#
+# `enabled = false` is the first gate (StrategyLimits — the strategy is not even
+# spawned). The second gate is G0, applied live: without
+# `rewards_daily_rate > rf_min_daily_rate` confirmed by the scan for the
+# bracket's duration, RF cancels and posts nothing — it does not farm what does not
+# pay.
+
+[reward_farm]
+enabled = false
+
+max_orders_per_hour  = 0
+# The executor silently rejected (order/executor.rs)
+# the expensive leg for mid > ~0.52 even though the allowed band reaches mid 0.90.
+# Theoretical ceiling of ONE leg = 0.90 (mid_max) × 50 shares (min_size) = 45 USDC;
+# 46 leaves rounding margin without blocking the band edge.
+max_order_usdc       = "46"
+daily_loss_usdc_stop = "0"
+
+# Minimum interval between rf_scan logs for the same market (seconds).
+scan_log_interval_secs = 60
+
+# ── Market selection ─────────────────────────────────────────────────────────
+rf_durations         = ["daily", "weekly"]  # NEVER "5m"/"hourly" by default
+rf_max_markets       = 5        # simultaneous brackets (limited by capital)
+# With 0.0 the G0 gate was a no-op (any rate ≥ 0 passed). 10 $/day: with a
+# realistic share of ~10-20% of the pool that is ~1-2 $/day for ~48 USDC
+# tied up — below that, farming does not even pay the capital's opportunity cost.
+rf_min_daily_rate    = "10.0"   # minimum pool rate $/day to enter (>0 required, gate G0)
+rf_mid_min           = "0.10"   # do not farm with mid < this (two-sided rule)
+rf_mid_max           = "0.90"   # do not farm with mid > this
+
+# ── Quoting policy ───────────────────────────────────────────────────────────
+rf_edge_buffer_cents       = "0.5"  # inside the band edge: s_target = v − this
+rf_requote_threshold_cents = "1.0"  # requote if the mid moves ≥ this
+rf_queue_behind            = true   # place behind the existing queue in the band
+rf_single_level            = true   # one level per side (never a ladder)
+
+# ── Sizing / capital ─────────────────────────────────────────────────────────
+rf_size_mode        = "min_size"  # order_size_shares = exact rewards_min_size
+rf_max_total_usdc   = "300"       # RF's own sub-cap within the global cap
+rf_require_no_pm_mm = true        # bracket exclusivity versus PM/MM
+
+# ── Withdrawal on toxic flow ─────────────────────────────────────────────────
+rf_cvd_toxic          = "0.35"  # |cvd_ratio_60s| that dooms a leg
+rf_liq_toxic_notional = "0"     # |liq_net_60s| USDT that dooms a leg (0 = disabled until calibrated)
+# 2.0 → 1.6 (calibrated against the broken σ̂; 1.6 ≈ p99 of the
+# sigma_short/sigma_long ratio with the new estimator, realized_vol_per_sec).
+rf_vol_ratio_pause    = "1.6"   # sigma_short/sigma_long that pauses BOTH legs (spike)
+
+# ── Fill management ──────────────────────────────────────────────────────────
+rf_max_fills_per_bracket = 1      # after N fills the bracket is BURNED (do not reopen)
+rf_unwind_hold_fv        = "0.85" # FV of the retained leg to HOLD to settlement
+rf_unwind_dump_fv        = "0.55" # below → taker DUMP
+rf_repost_min_secs       = 300    # minimum remaining time to repost a maker ask in the neutral zone
+
+# ── Common limits ─────────────────────────────────────────────────────────────
+min_secs_to_clear = 3600  # do not enter within <1h of close (daily/weekly have room to breathe)
+max_secs_to_clear = 0     # 0 = no ceiling

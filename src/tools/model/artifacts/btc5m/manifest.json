@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "created_at_ms": 1790449696367,
+  "files": [
+    {
+      "path": "model.json",
+      "sha256": "ef4e4b0860ef9601fb21462539f4d43d2c8af378060eb2dcb63d153502e4c396"
+    },
+    {
+      "path": "metrics_train.json",
+      "sha256": "16a2cbc63279a05dca8bc4b72fad147ef870afabb1c4872029a1e417e331c00f"
+    },
+    {
+      "path": "predictions_test.jsonl",
+      "sha256": "7eaddc7dcef3d9fa9587cc5ef6d7258fb1f8c743e7a99436e8e3a144031e58ea"
+    },
+    {
+      "path": "predictions_test.rust.jsonl",
+      "sha256": "576069a47c27bd6b406f74168c664fe7b98f40251b92e8332e8eb377b759b1ba"
+    }
+  ],
+  "model_hash": "ef4e4b0860ef9601fb21462539f4d43d2c8af378060eb2dcb63d153502e4c396",
+  "boundaries": {
+    "method": "temporal_market_grid",
+    "train_end_ms": 1790356500000,
+    "val_end_ms": 1790359200000,
+    "embargo_ms": 60000
+  },
+  "eval_mode": "retrospective",
+  "oos_operable": false,
+  "include_post_close": false,
+  "exclude_pre_open": true
+}

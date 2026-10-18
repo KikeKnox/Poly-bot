@@ -1,0 +1,73 @@
+# PostCloseSweep — buys the deterministic winning side after the close.
+#
+# After a bracket's clear_at, Polymarket takes a while to resolve the
+# market and the book keeps streaming (see post_close.rs, which passively observes
+# that window). PostCloseSweep trades that window: it freezes the oracle spot
+# right before the close, computes the deterministic verdict (spot vs. strike)
+# and buys the winning side — a maker GTD at 0.99 and, optionally, a taker FOK
+# sweep if the winner's ask is still below taker_max_ask.
+#
+# There is no bail: the post-close verdict is already deterministic (not directional) —
+# the only exit is automatic redemption when the market resolves. Asymmetric
+# 1:100 risk (we buy at ~0.99, win ~0.01 or lose ~0.99 if the
+# verdict is wrong), mitigated by min_rel_move: a spot move that is
+# too small is declared undetermined and the strategy does not enter.
+#
+# Gate to live: paper calibration confirming that the deterministic verdict
+# is never wrong (0 losses from a wrong verdict) and maker fill_rate > 0.
+
+[post_close_sweep]
+# Disabled: 14,718 post-close observations, 0% with an offer on the winning
+# side. There is nothing to sweep in up/down markets.
+enabled = false
+
+max_orders_per_hour  = 0
+max_order_usdc       = "10"
+daily_loss_usdc_stop = "20"
+
+# Minimum relative move of the frozen spot vs. reference_price to
+# declare a verdict. Below this, oracle noise does not allow telling the
+# winning side apart with confidence — mitigates the 1:100 risk.
+min_rel_move = "0.001"
+
+# Price of the maker GTD bid on the winning side. Close to 1 because the verdict
+# is already deterministic — no maker discount is sought, a fill is.
+# 3 decimals because the CLOB lowers the tick to 0.001 above 0.96 (exactly the
+# range where this strategy operates): a bid at 0.99 with tick 0.001 sits behind the whole
+# 0.991-0.999 queue and never fills. If a given market had tick
+# 0.01, the price is automatically degraded to 0.99 in clob_sdk.rs
+# (price_at_market_tick) without breaking the order.
+maker_bid_price = "0.999"
+
+# Taker (FOK) sweep of cheap winner asks. The taker fee at 0.95 is
+# ~33bps against ~500bps of margin — negligible. Passive observation showed
+# $37k/1.5h of dumps resting as asks; calibration measures both
+# flows (maker vs taker fills) to decide which dominates.
+taker_enabled = true
+
+# Maximum ask of the winning side to trigger the taker sweep.
+taker_max_ask = "0.995"
+
+# TTL of the maker GTD in seconds: with no fill after this, cancel and do not retry
+# that bracket (avoids being left exposed to a stale GTD when the market has already
+# corrected to $1/$0).
+gtd_ttl_secs = 90
+
+# Maximum post-close window to trade (seconds since clear_at). Beyond
+# this Polymarket has usually already resolved the market.
+max_sweep_secs = 110
+
+# Maximum age of the pre-close frozen spot to accept it as the
+# verdict reference. A spot that is too stale no longer represents the
+# real closing price.
+max_spot_age_secs = 8
+
+# Maximum size in shares. 0 = no cap (primary limit: max_order_usdc).
+max_size_shares = "0"
+
+# Global exposure reserve exclusive to this strategy — added to the global cap
+# (risk.max_total_exposure_usdc) ONLY for this strategy. The
+# "exposure > max" rejections lost near-certain-verdict entries that competed for the same global
+# cap with directional strategies of very different risk. Do not copy this
+# pattern to other strategies without the same deterministic-verdict profile.
+exposure_carveout_usdc = "30"

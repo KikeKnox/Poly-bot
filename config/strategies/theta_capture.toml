@@ -1,0 +1,72 @@
+# ThetaCapture — maker GTD bid on the near-winning side.
+#
+# Maker variant of NC: in the last max_window_secs before the close, when
+# yes_ask >= min_yes_price, it posts a GTD bid at yes_ask - bid_discount.
+# Enters cheaper than NC (taker) and without taker fee when there are panic sellers.
+# If the oracle reverses, it cancels the GTD before it fills.
+#
+# Gate to live: 48h paper, fill_rate > 30%, positive markout at 5s.
+
+[theta_capture]
+enabled = false
+
+# EXPLICIT BLOCK: TC cannot go live until its resting sells/shorts are modeled —
+# a maker ask on a token that is not owned is a naked short: the GTD's claim
+# disappears when it is cancelled and `state.rs` does not model open shorts (a
+# bail-sell of an owned position would be safe, but the blocker applies to the
+# whole strategy until the ledger distinguishes both cases).
+# `Config::validate` also aborts startup in live if TC is not
+# `paper_only` — removing it without modeling shorts = fail-closed boot.
+paper_only = true
+max_orders_per_hour  = 20
+# Half-Kelly scaling f* = (WR - c)/(1 - c) buying at average cost c (average observed fill
+# of the winner). Do not step up while EV/share = WR - c <= 0. Requirement
+# before each step: markout >= 0 at 5s and n >= 100 fills on the bought side. Planned
+# steps: $10 (current) → $20 → $40, one at a time and only if the previous gate is met.
+max_order_usdc       = "10"
+daily_loss_usdc_stop = "20"
+
+# Minimum ask of the winning side. With YES >= 0.93, NO is worth <= 0.07 → low reversal risk.
+# 0.93→0.90 — raise the arrival rate of candidates (a 7.2% fill_rate was lack of n, not of quality; 30s markout +410 bps)
+min_yes_price = "0.90"
+
+# Discount over the ask to be maker (better price than NC taker).
+# ask=0.95 → bid=0.935. Edge vs NC = bid_discount + taker fee saved.
+# 0.015→0.03 — with 0.015 the average fill was 0.9308, which requires WR >93.1%
+# and the observed one was 90.3% (EV −0.028/share; BUY markout −972 bps = adverse
+# selection). Buying ~1.5 cts cheaper tests whether the WR holds at a better
+# price (+EV if WR ~90% at fill ~0.92). Note: fill_rate will drop (already 15.7%,
+# gate ≥30%) — if both gates stay incompatible, TC is a candidate for discard.
+bid_discount = "0.03"
+
+# Activation window: only trade in the last N seconds before the close.
+# 90→150 — more bid exposure ⟹ more n/h, same fill quality
+max_window_secs = 150
+
+# Maximum tolerable bid-ask spread. 0 = no filter.
+max_bid_ask_spread = "0"
+
+# Minimum bid to execute the bail-sell (do not sell into a dry market).
+min_bail_bid = "0.10"
+
+# Enable selling the losing side as maker (GTD ask on NO when YES >= min_yes_price).
+# Disable until the winning-bid fills are calibrated.
+#
+# +EV activation condition — only profitable if winner WR > 1 - min_loser_ask.
+# With the observed winner WR (90.3%) and the current min_loser_ask (0.04-0.05), the break-even
+# threshold is 1-0.04=96% / 1-0.05=95%: today EV− (90.3% < 95-96%). Review after the
+# calibration with bid_discount=0.03 (see below) — a cheaper average fill on the
+# winner could shift the observed WR. Before enabling, also check the
+# fill ratio of the losing side (hrf_tc_loser_sold_total / hrf_tc_loser_placed_total > 0):
+# without fills there the premium is never collected and the theoretical +EV is worthless.
+sell_loser_side = false
+
+# Minimum price of the maker ask on the losing side. Only applies if sell_loser_side=true.
+min_loser_ask = "0.04"
+
+# Cancel/bail: σ × √t against for bail_checks_required ticks → cancel GTD.
+bail_sigma = "2.5"
+bail_checks_required = 3
+
+# Maximum size in shares. 0 = no cap (primary limit: max_order_usdc).
+max_size_shares = "0"

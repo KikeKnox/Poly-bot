@@ -1,0 +1,11 @@
+# ResearchEvents — causal recorder of research events.
+#
+# Records the RAW event stream (Polymarket WS, REST resync, Binance ticks,
+# derived spot, executor OrderSubmit) in JSONL — a causal ledger for
+# replay/training. `enabled=false` by default: it is disk volume on
+# the hot path. The remaining parameters (dir, capacities, record_tape)
+# live in the [research_events] section of config/general.toml — `enabled`
+# lives HERE because it is what the live toggle persists.
+
+[research_events]
+enabled = false

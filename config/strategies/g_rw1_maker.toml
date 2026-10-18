@@ -1,0 +1,39 @@
+# ── G-RW-1 strategy ───────────────────────────────────────────────────────────
+# Buy markout in paper: fixed ticket at the best bid (GTD) and best ask (FOK)
+# of each token, with no FV or position management — the gate measures entry, not P&L.
+# Dedicated vehicle, see src/strategy/g_rw1_maker.rs. Target run: 7 days.
+
+[g_rw1_maker]
+# RETIRED: Polymarket removed the up/down family from the
+# liquidity rewards program, so the thesis this strategy was going to measure no longer
+# exists. The file and its configuration are NOT deleted: it stays as a paper
+# experiment, switched off, in case the program returns or the markout is to be repeated.
+enabled = false
+
+# An experiment that must NEVER trade with real money: in live mode the bot
+# neither starts it nor lets it be switched on.
+paper_only = true
+
+# Universe: only btc-updown-5m and btc-updown-15m (52.5% of the total rewards pool),
+# declared in config/general.toml [universes.g-rw1].
+universe = ["g-rw1"]
+
+# Trading limits. daily_loss_usdc_stop=0 (no stop): in paper there is no
+# real capital at stake and the gate needs the run not to pause itself on
+# simulated P&L noise — the KILL/PASS criterion is decided by the offline
+# markout analysis, not by the kill switch.
+max_orders_per_hour = 1000
+max_order_usdc = "60"
+daily_loss_usdc_stop = "0"
+
+# EXACT ticket per side (bid and ask, YES and NO) — fixed by the gate's design,
+# it does not scale with FV or inventory.
+ticket_shares = "50"
+
+# Repost if the touch moved more than this since the last ticket.
+requote_threshold_bps = 20
+
+# TTL before forcing a new attempt even if the price has not moved
+# (it also acts as the cooldown of the ask/FOK side, which has no "live" order
+# that expires on its own). 5s = same window as the primary markout metric.
+order_ttl_secs = 5

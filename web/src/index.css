@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Poly-bot — control room of a trading bot on prediction markets.
+ * Everything in this product reduces to a price-as-probability between 0 and 1
+ * (0.31 on a Polymarket YES IS 31% implied) and to a limit that keeps filling
+ * up (exposure vs. cap). The palette and the level components (see
+ * components/ui/gauge.tsx) are built on these two ideas, not decoration:
+ *   - amber = YES / up · cyan = NO / down (the binary of the product itself —
+ *     up/down brackets, near_certain, follower...)
+ *   - green/red are reserved EXCLUSIVELY for PnL and danger (kill
+ *     switches) — it is the financial convention every operator already
+ *     knows; breaking it would cause misreadings under pressure, so it does
+ *     not compete with amber/cyan for that meaning.
+ * IBM Plex Mono for every figure (real tabular alignment, like a ticker) +
+ * IBM Plex Sans for prose — same superfamily, two cuts.
+ */
+:root {
+  color-scheme: dark;
+  --radius: 0.3rem;
+
+  --ink:      oklch(0.17 0.020 265);
+  --panel:    oklch(0.22 0.024 265);
+  --panel-2:  oklch(0.19 0.022 265);
+  --panel-3:  oklch(0.27 0.028 265);
+  --paper:    oklch(0.94 0.006 265);
+  --dim:      oklch(0.62 0.018 265);
+  --hair:     oklch(0.94 0.006 265 / 10%);
+
+  --amber:    oklch(0.78 0.140 70);
+  --cyan:     oklch(0.75 0.110 220);
+  --gain:     oklch(0.72 0.160 155);
+  --danger:   oklch(0.63 0.210 25);
+
+  --background: var(--ink);
+  --foreground: var(--paper);
+  --card: var(--panel);
+  --card-foreground: var(--paper);
+  --popover: var(--panel);
+  --popover-foreground: var(--paper);
+  --primary: var(--amber);
+  --primary-foreground: var(--ink);
+  --secondary: var(--panel-2);
+  --secondary-foreground: var(--paper);
+  --muted: var(--panel-2);
+  --muted-foreground: var(--dim);
+  --accent: var(--cyan);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--hair);
+  --input: oklch(0.94 0.006 265 / 14%);
+  --ring: var(--amber);
+  --chart-1: var(--amber);
+  --chart-2: var(--cyan);
+  --chart-3: var(--gain);
+  --chart-4: var(--danger);
+  --chart-5: var(--dim);
+  --sidebar: var(--panel-2);
+  --sidebar-foreground: var(--paper);
+  --sidebar-primary: var(--amber);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: var(--panel);
+  --sidebar-accent-foreground: var(--paper);
+  --sidebar-border: var(--hair);
+  --sidebar-ring: var(--amber);
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Domain-specific semantics — the shadcn primitives do not touch these. */
+  --color-up: var(--amber);
+  --color-down: var(--cyan);
+  --color-gain: var(--gain);
+  --color-panel-2: var(--panel-2);
+  --color-panel-3: var(--panel-3);
+  --color-ink: var(--ink);
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply text-foreground font-sans;
+    /* Real relief background instead of a flat solid — a very subtle radial wash
+     * (barely 8% lighter than --ink at the top center) gives the depth of a
+     * "room lit from above" without falling into decorative texture or noise. */
+    background:
+      radial-gradient(ellipse 1400px 700px at 50% -10%, oklch(0.27 0.028 265 / 55%) 0%, transparent 65%),
+      var(--background);
+    background-attachment: fixed;
+    font-feature-settings: "tnum" 1;
+  }
+  /* Every tabular figure by default — real column alignment, not just looks. */
+  .tabular,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* Pulse of the "RUNNING" LED in the header — the only ambient motion in the
+ * UI, reserved for the one signal that is truly continuous (the bot is still
+ * alive). Everything else animates only in response to a data change. */
+@keyframes led-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in oklch, currentColor, transparent 40%); }
+  50%      { opacity: 0.55; box-shadow: 0 0 0 4px color-mix(in oklch, currentColor, transparent 100%); }
+}
+.animate-led-pulse {
+  animation: led-pulse 2.4s ease-in-out infinite;
+}
+@mean (prefers-reduced-motion: reduce) {
+  .animate-led-pulse { animation: none; }
+}
+
+/* Panel lift — "lit from above", like the rest of the visual language
+ * (control room with overhead light). A single 1px highlight, never a drop
+ * shadow: it keeps panels flat relative to each other, bordered only. */
+.panel-lift {
+  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 6%);
+}
+
+/* Amber-to-cyan hairline — the brand mark that sums up the product's binary
+ * (YES/NO, up/down) in a single line. It sits below the cockpit header,
+ * visible on every page, at low opacity so it does not compete with the data
+ * right below it. */
+.hairline-updown {
+  height: 2px;
+  background: linear-gradient(90deg, var(--amber), var(--cyan));
+  opacity: 0.3;
+}
+
+/* Glow for the single "hero" figure on each page (equity) — reads as
+ * emphasis, not as neon. */
+.glow-amber-text {
+  text-shadow: 0 0 24px oklch(0.78 0.140 70 / 30%);
+}

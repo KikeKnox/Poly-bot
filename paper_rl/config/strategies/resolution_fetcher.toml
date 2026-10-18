@@ -1,0 +1,3 @@
+# paper_rl profile: fetcher OFF (its serde default is true — it must be declared).
+[resolution_fetcher]
+enabled = false

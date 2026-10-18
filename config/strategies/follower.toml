@@ -1,0 +1,26 @@
+# Wallet follower (phase 0).
+#
+# Although the analysis concludes that copying the target wallet is not profitable
+# with the measured latency/fee, the follower is built anyway to validate it
+# empirically in paper (no real risk).
+#
+# It is NOT a `Strategy` — it is a standalone task (`src/strategy/follower.rs`)
+# that watches the on-chain activity of `target_wallet_address` by polling
+# data-api.polymarket.com/activity and replicates its buys/sells with its
+# OWN size (independent of the target wallet's real size — the EV is per
+# dollar wagered). `enabled=false` by default: enable only in paper.
+#
+# Known limitation: no live toggle (see `strategy/supervisor.rs`) —
+# enable/disable only via this file + a bot restart.
+
+[follower]
+enabled = false
+
+target_wallet_address = "0x00000000000000000000000000000000000000a1"
+poll_interval_secs = 5
+size_usdc = "10"
+max_slippage_pct = "0.02"
+mirror_exits = true
+max_orders_per_hour = 0
+max_order_usdc = "10"
+daily_loss_usdc_stop = "50"

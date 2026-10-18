@@ -1,0 +1,30 @@
+[
+  {
+    "id": "612345",
+    "question": "Bitcoin Up or Down - September 23, 10:55AM-11:00AM ET",
+    "conditionId": "0xcc719fadd13918ec1eac3d258186caa07a1446f44e76521cdc9fb80cb14df321",
+    "slug": "btc-updown-5m-1790175300",
+    "endDate": "2026-09-23T15:00:00Z",
+    "startDate": "2026-09-22T14:00:00Z",
+    "eventStartTime": "2026-09-23T14:55:00Z",
+    "outcomes": "[\"Up\", \"Down\"]",
+    "outcomePrices": "[\"0.9995\", \"0.0005\"]",
+    "clobTokenIds": "[\"49355575869915607833628566107383680390001608252605296559614869970709347593818\", \"85090347783046098187782235350502474530416457463938134254182332167000529376123\"]",
+    "umaResolutionStatus": "proposed",
+    "umaResolutionStatuses": [
+      "proposed"
+    ],
+    "closed": true,
+    "active": true,
+    "negRisk": false,
+    "enableOrderBook": true,
+    "acceptingOrders": false,
+    "feeSchedule": {
+      "rate": 0.04
+    },
+    "orderMinSize": 5,
+    "orderPriceMinTickSize": 0.001,
+    "liquidityClob": "12345.67",
+    "volumeClob": "9876.54"
+  }
+]

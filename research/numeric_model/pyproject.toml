@@ -1,0 +1,24 @@
+# Numeric research model (task T8, phase A — scaffold).
+# Code is 100% stdlib on purpose: causality needs no numeric stack
+# and the tests must run with `python3 -m unittest` without installing anything.
+# numpy/pandas are installed on the system (verified) but NOT
+# required; sklearn/torch are not available — they are declared below
+# as extras for phase B (real training), never in the system Python:
+# use a venv/uv if they are installed.
+
+[project]
+name = "hrf-numeric-model"
+version = "0.1.0"
+description = "Causal dataset and numeric baseline for paper research (HRF_V4, T8)"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+phase_b = ["numpy", "pandas", "scikit-learn"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["dataset", "train", "evaluate", "environment"]

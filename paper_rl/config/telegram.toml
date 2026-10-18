@@ -1,0 +1,11 @@
+# ── Telegram — paper_rl PROFILE (HARMLESS, generated from defaults) ───────────
+# The loader (`Config::load`) always merges this file, so it must exist.
+# It contains NO tokens or IDs: Telegram credentials live only in env
+# (TELEGRAM_BOT_TOKEN / TELEGRAM_ALLOWED_IDS) and the profile launcher runs
+# with `env -i` + `HRF_NO_DOTENV` — the Telegram bot never starts here.
+# This file is NOT a copy of the main telegram.toml: it is generated with
+# inert default values.
+
+[telegram]
+fill_alerts = false
+periodic_summary_hours = 0

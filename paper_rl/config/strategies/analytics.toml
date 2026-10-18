@@ -1,0 +1,3 @@
+# paper_rl profile: collector OFF (its serde default is true — it must be declared).
+[analytics]
+enabled = false

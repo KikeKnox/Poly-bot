@@ -1,0 +1,73 @@
+# systemd unit for poly-bot — supervision and automatic restart.
+#
+# Reason: the bot died at 00:20:25 UTC with all its writers healthy the previous
+# second (signature of a hard kill: OOM, power cut or reboot) and stayed
+# dead for 4 days, because `launch.sh` does `exec` and nothing above it
+# brought it back up. For a 24/7 run the specific cause of death matters less
+# than the fact that nothing recovers from it.
+#
+# Installation:   sudo ./deploy/install-service.sh
+# View logs:     journalctl -u poly-bot -f
+# Stop/start:    sudo systemctl {stop,start,restart} poly-bot
+
+[Unit]
+Description=poly-bot — Polymarket up/down bracket HFT bot
+Documentation=file:__HRF_DIR__/README.md
+# The network outages observed during the run (Polymarket WS and Binance oracle
+# going silent at once, for up to 20 min) do not kill the process, but it is
+# better not to start before the network is up.
+Wants=network-online.target
+After=network-online.target
+
+# No start limit: systemd's default behavior is to GIVE UP after 5 restarts in
+# 10 s and leave the unit in `failed` — exactly the failure we are fixing.
+# `RestartSec=10` already bounds the loop to 6 attempts/min.
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+User=__HRF_USER__
+Group=__HRF_GROUP__
+WorkingDirectory=__HRF_DIR__
+# The DBs now live outside __HRF_DIR__
+# (HRF_DB_PATH / HRF_ANALYTICS__DB_PATH in .env, typically under
+# runtime/.../paper|live/). Those env vars DO reach the process without
+# changing anything here: launch.sh does `cd` to its own directory (it does not rely on
+# WorkingDirectory), `set -a; source .env; set +a` (exports everything in
+# .env) and then `exec ./target/release/poly-bot`, which inherits that environment.
+# Write access to that path under /home is already allowed by ProtectHome=false
+# below — no additional ReadWritePaths is needed.
+ExecStart=__HRF_DIR__/launch.sh
+
+Restart=always
+RestartSec=10
+
+# Clean shutdown: on SIGTERM the bot closes the SQLite WAL and drains the analytics
+# writer. 90 s of margin before SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=poly-bot
+
+# If the kernel kills the process for OOM, systemd should restart it anyway.
+OOMPolicy=continue
+
+# Reasonable hardening without breaking access to config/, .env and the .sqlite files
+# of the working directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+# Uncomment to cap the process memory (useful if an OOM kill
+# is suspected). MemoryHigh applies reclaim pressure before killing.
+# MemoryHigh=3G
+# MemoryMax=4G
+
+[Install]
+WantedBy=multi-user.target

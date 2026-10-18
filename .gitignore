@@ -1,0 +1,53 @@
+# Build output
+/target
+web/node_modules/
+web/dist/
+src/api/static/dist/
+
+# Secrets: never commit
+.env
+.env.local
+.env_old
+*.swp
+.*.sw?
+
+# Local state and databases
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Data (recorded books, tapes, datasets) lives outside the repo
+data/
+research/data/
+paper_rl/data/
+ladder_scan.csv
+
+# Transfer bundles (clean.sh --pack)
+*.tar.gz
+
+# Run artifacts and logs (poly-bot.log can reach hundreds of MB)
+calibration_*/
+calibration_*.log
+launch_run.log
+launch.log
+*.log
+runtime/*.log
+__pycache__/
+.pytest_cache/
+
+# Symlink to the rl_predictor pipeline run data (kept outside the repo)
+/tools/rl_predictor/integration
+
+# AI agent tooling and local assistant state
+.claude/
+.codex/
+.codegraph/
+.hermes/
+.opencode/
+.omo/
+.superpowers/
+.wolf/
+/.worktrees/
+CLAUDE.local.md
+
+# Internal planning material (kept outside the public repo)

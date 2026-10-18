@@ -1,0 +1,11 @@
+# ResolutionFetcher — official fetcher of resolutions (read-only).
+#
+# Sweeps closed markets in markets_observed that have no `confirmed` label and queries Gamma
+# by slug; the official result enters through research_labels::apply_fetch.
+# It never invents a winner: an unreachable/ambiguous fetch leaves the market
+# pending. The remaining parameters (poll_secs, batch, horizon) live in the
+# [resolution_fetcher] section of config/general.toml — `enabled` lives HERE
+# because it is what the live toggle persists.
+
+[resolution_fetcher]
+enabled = true

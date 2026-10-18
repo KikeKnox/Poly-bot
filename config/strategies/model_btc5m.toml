@@ -1,0 +1,64 @@
+# ── ModelBtc5m strategy ───────────────────────────────────────────────────────
+# PAPER-ONLY vehicle for the numeric model (`src/strategy/model_btc5m.rs`):
+# consumes `ModelPrediction` probabilities emitted by the `ModelTool` tool
+# (`src/tools/model/`) and translates them into taker FOK `OrderIntent`s when the net
+# edge exceeds the threshold.
+#
+# Live barrier: `paper_only` stays FIXED at `true`, and the supervisor and the
+# `ModelBtc5m` constructor reject `mode = "live"` whatever this config says.
+# An accidental override does NOT enable it for live.
+#
+# The remaining fields are optional overrides over the defaults of
+# `ModelBtc5mConfig` (`src/strategy/model_btc5m.rs::defaults`). The supervisor
+# persists `enabled` here from the API/Telegram; the rest is only re-read on
+# restart.
+
+[model_btc5m]
+enabled = false
+
+# STRUCTURALLY paper-only — this strategy does NOT model live (it is the vehicle for the
+# numeric model in paper). Its constructor `ModelBtc5m::new` aborts if the
+# combination is not paper_only=true (fail-closed, see the supervisor).
+paper_only = true
+
+# Dedicated universe: BTC 5m ONLY. The 300s duration is filtered inside the
+# strategy; this `universe` defines the subset of markets to scan.
+# Discovery may assign BTC 5m to any of these overlapping universes.
+# The structural BTC slug and 300s duration filter remains mandatory.
+universe = ["crypto-updown-short", "crypto-updown-long", "g-rw1"]
+
+# Sizing: cap per entry (5 USDC). The paper experiment uses a 100 USDC balance,
+# global exposure cap 10 USDC — 5 USDC gives headroom (1 fill ~50% of the cap).
+max_order_usdc = "5"
+# Rate limit: 60 entries/hour (1/minute on average) — consistent with the tool's
+# `min_decision_interval_ms=1000`, so it never falls a
+# decision behind because of the executor's rate limit.
+max_orders_per_hour = 60
+# Daily loss stop per strategy (10 USDC = global exposure cap; 2 losing
+# fills at the cap's maximum already hit the stop). The STRATEGY stop is
+# covered — in paper it does NOT kill the whole bot.
+daily_loss_usdc_stop = "10"
+
+# Minimum net edge `p_model − ask − fee − slippage_margin ≥ min_net_edge`.
+# 5¢ net after real fee and slippage — a smaller fill covers neither fee nor slippage.
+min_net_edge = "0.05"
+# Pre-trade slippage margin (USDC/share). Covers movement between the book read
+# and arrival at the CLOB (~100-300ms typical).
+slippage_margin = "0.01"
+# Maximum tolerable bid-ask spread on EACH leg. 5¢ — a bracket at 0.5/0.5
+# has a spread < 2¢; a wide spread = dead liquidity, we do not enter.
+max_spread = "0.05"
+# Entry window (seconds remaining in the bracket). Below = preclose,
+# above = preopen. Filter BEFORE the fill, no trading outside the range.
+min_remaining_secs = 30
+max_remaining_secs = 240
+
+# Maximum size per entry in SHARES (0 = inherit from `max_order_usdc`):
+# the real cap is computed as max_order_usdc / 0.5 (expected ask ≈ 0.5) ≈
+# max_order_usdc × 2. With max_order_usdc=5 → ~10 shares. 0 = no override.
+max_size_shares_override = "0"
+
+# Fee rate fallback if the `/fee-rate` endpoint returns no specific value
+# for the market. 0.07 is the canonical crypto updown one
+# (taker fee rate; parabolic fee C × rate × p × (1−p)).
+fee_rate_fallback = "0.07"

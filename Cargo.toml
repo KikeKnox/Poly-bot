@@ -1,0 +1,113 @@
+[package]
+name = "poly-bot"
+version = "0.1.0"
+edition = "2021"
+description = "Research-grade Polymarket up/down trading bot (Rust/Tokio) with a deterministic paper simulator (default mode) and live execution"
+license = "MIT"
+readme = "README.md"
+publish = false
+
+[lib]
+name = "poly_bot"
+path = "src/lib.rs"
+
+[[bin]]
+name = "poly-bot"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP + WebSocket
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+
+# Official Polymarket CLOB SDK — exact pin because it is a canary
+polymarket_client_sdk_v2 = { version = "=0.6.0-canary.1", features = ["clob", "tracing", "data", "ctf"] }
+
+# EVM / signing — aligned with the version the SDK uses (alloy 1.x)
+alloy = { version = "1", features = [
+    "signers",
+    "sol-types",
+    "consensus",
+    # redeem.rs: signing HTTP provider for on-chain redeemPositions
+    "providers",
+    "contract",
+    "network",
+    "reqwest",
+] }
+
+hex = "0.4"
+
+
+# Decimal arithmetic
+rust_decimal = { version = "1", features = ["serde", "maths"] }
+rust_decimal_macros = "1"
+
+# JSON
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging + traces
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Metrics
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
+
+# Concurrency / shared state
+dashmap = "6"
+parking_lot = "0.12"
+
+# Tiempo
+chrono = { version = "0.4", features = ["serde"] }
+
+# Config
+figment = { version = "0.10", features = ["toml", "env"] }
+# TOML editing that preserves comments (persisting strategy toggles)
+toml_edit = "0.22"
+
+# SQLite (state persistence)
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "macros"] }
+
+# Blocking SQLite for the `tools::recorders::analytics` writer (dedicated OS thread,
+# separate from StateStore/sqlx).
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# HTTP server (kill switch + metrics)
+axum = "0.8"
+
+# Serve static files (compiled SPA from web/) with fallback to index.html
+tower-http = { version = "0.6", features = ["fs"] }
+
+# Error handling
+anyhow = "1"
+
+# Automatic .env loading (useful with cargo run / running directly without launch.sh)
+dotenvy = "0.15"
+
+# Stream utilities
+futures-util = "0.3"
+
+# Constant-time bearer token comparison
+subtle = "2"
+
+# Secure memory zeroing for private keys
+zeroize = { version = "1", features = ["derive"] }
+
+# Direct dependency to pin the TLS CryptoProvider at startup.
+# reqwest pulls in aws-lc-rs and tokio-tungstenite pulls in ring; with both
+# present, rustls 0.23 panics if nobody calls install_default() before the
+# first TLS socket. aws-lc-rs is pinned because it is already in the tree (via reqwest).
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
+
+[dev-dependencies]
+tempfile = "3"
+hex = "0.4"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

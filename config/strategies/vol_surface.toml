@@ -1,0 +1,31 @@
+# VolSurface — cross-expiry implied-volatility scan (phase 1: observation only).
+#
+# For the same asset and strike, brackets with different durations should have
+# the same implied σ if the market is efficient. When they diverge ≥ vol_ratio_threshold,
+# there is a possible maker edge in the bracket that overestimates the vol.
+#
+# SCAN ONLY: it emits no orders. Only Prometheus metrics + logs.
+# Enable in paper to gather data before implementing phase 2 (trading).
+# Gate to phase 2: ≥1 week of scanning confirming a real edge and not liquidity artifacts.
+
+[vol_surface]
+enabled = false
+
+# Placebo limits (scan-only, not used to execute orders)
+max_orders_per_hour  = 0
+max_order_usdc       = "0"
+daily_loss_usdc_stop = "0"
+
+# Minimum ratio σ_short/σ_long (or σ_long/σ_short) to log a divergence.
+# 2.0 → 1.6 (calibrated against the broken σ̂; 1.6 ≈ p99 of the
+# sigma_short/sigma_long ratio with the new estimator, realized_vol_per_sec).
+vol_ratio_threshold = 1.6
+
+# Minimum remaining time of the short bracket (< max_remaining_short).
+# Below this threshold the bracket price may be affected by low closing
+# liquidity and the implied vol would be noisy.
+min_remaining_short = 60
+
+# Maximum remaining time of the short bracket.
+# Brackets with more time than this are considered "long" in the comparison.
+max_remaining_short = 600

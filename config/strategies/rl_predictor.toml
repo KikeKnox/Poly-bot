@@ -1,0 +1,105 @@
+# ── RlPredictor strategy (ONLINE RUNTIME, paper-only) ─────────────────────────
+# Online vehicle of the contract in `docs/rl_predictor_design/`. A linear
+# softmax policy of 9 actions loaded fail-closed from a `paper_approved` artifact
+# (`policy.json` + `manifest.json`) with an online REINFORCE learner inside the bot
+# (bounded worker, immutable snapshots per watch, versioned checkpoints). It consumes the
+# frozen predictor's `ModelPrediction` as the `p_yes` feature — the predictor
+# artifact (`src/tools/model/artifacts/btc5m`) is NOT a policy and is never pointed
+# at here as one.
+#
+# Live barrier: `paper_only=true` is fixed, and the ctor
+# `RlPredictor::new` aborts with `Mode::Live` — neither live trading nor live learning,
+# whatever this config says (a structural barrier, not a default).
+#
+# Status: a REAL `paper_approved` artifact is present in `artifact_dir` (below) —
+# `paper_bootstrap_v1`, promoted from a verified tip of an online training run
+# (see the artifact's `approval_report.json`).
+# Normal activation: `./launch.sh` + a live toggle from the UI
+# (`/control/strategy`) — the `model_tool` predictor is already enabled in the
+# normal config and the supervisor injects the predictions channel when
+# building it. If the artifact is missing or fails validation, the strategy is built
+# DISABLED with a visible reason in `/ui/rl_learner` — it never falls back to
+# synthetic/zero/random weights.
+
+[rl_predictor]
+enabled = false
+paper_only = true
+
+# Universes a BTC-5m bracket can fall into — all 3 MUST be declared:
+# `discover_all_active_universes` deduplicates cids by filter specificity
+# ("slug" first) and ALPHABETICALLY within the same level, so when
+# `crypto-updown-long` is active (declared by model_btc5m) it claims ALL the
+# `*-updown-*` brackets before `crypto-updown-short`/`g-rw1`. Without
+# `crypto-updown-long` here the runner skips every book before `on_book`
+# (learner alive but transitions_rx=0).
+# The real scope is still BTC 5m: `is_target_market` filters slug and
+# 300s duration inside the strategy, just like model_btc5m.
+universe = ["crypto-updown-short", "crypto-updown-long", "g-rw1"]
+
+# Rate/size: taker FOK per market, at most one intent in flight.
+# Budget per entry (additionally capped by `initial_episode_budget`).
+max_order_usdc = "5"
+max_orders_per_hour = 0
+daily_loss_usdc_stop = "10"
+
+# APPROVED policy artifact: directory with `policy.json`+`manifest.json`
+# (`status="paper_approved"`, `approval.scope="paper"`). Empty = disabled.
+# paper_bootstrap_v1 = verified online tip (real update, drift 0).
+artifact_dir = "src/tools/model/artifacts/rl_predictor/paper_bootstrap_v1"
+# Online checkpoints of the learner (`<dir>/active.json` + `checkpoints/vNNNNNN/`).
+# Dedicated, clean directory: the online chain starts with base_sha256 =
+# sha256 of paper_bootstrap_v1's policy.json.
+checkpoint_dir = "data/rl_predictor_bootstrap_v1"
+# sha256 of the predictor (`model.json`) against which the policy was approved —
+# pinned explicitly: an artifact trained against another predictor does NOT load.
+expected_predictor_sha256 = "ef4e4b0860ef9601fb21462539f4d43d2c8af378060eb2dcb63d153502e4c396"
+
+# FIXED virtual budget per episode/market (USDC) — separates the simulator's
+# infinite paper money from learned ruin.
+initial_episode_budget = "10"
+
+# learning_enabled=false → frozen evaluation: deterministic argmax, no
+# trainable experience. true → legal sampling + cohorts + gated updates.
+learning_enabled = true
+
+# Freshness of the prediction used as a feature (ms).
+max_prediction_age_ms = 1500
+# Entry window (seconds remaining); SELL never uses it.
+min_remaining_secs = 30
+max_remaining_secs = 240
+# Maximum spread of the bought leg; slippage margin of the protective limit.
+max_spread = "0.05"
+slippage_margin = "0.01"
+# Fee rate fallback if the book carries no `parabolic_fee_rate` (0.07 canonical).
+fee_rate_fallback = "0.07"
+# Minimum executable size (shares).
+min_order_shares = "1"
+# An intent with no fill/reject in this time → uncertain market (no rejection is
+# invented; new orders are blocked until reconciled or closed).
+pending_timeout_ms = 3000
+# Settlement polling in `positions` (real SQLite) after clear_at.
+settle_poll_secs = 15
+# Maximum wait for the official outcome before closing as `settle_timeout`.
+settle_timeout_secs = 600
+
+# Reward penalties (0 in v1).
+lambda_inventory = 0.0
+lambda_drawdown = 0.0
+# Seed of the sampling PRNG (decision auditability).
+rng_seed = 0
+
+# Episodic REINFORCE learner (bounded worker; update only when a complete
+# cohort closes under a single policy version).
+learner_capacity = 2048
+learning_rate = 0.05
+max_grad_norm = 1.0
+# Numeric publication gates: update magnitude and KL over the cohort.
+max_update_l2 = 0.5
+max_mean_kl = 0.05
+max_step_kl = 0.2
+# Minimum complete episodes per cohort and accumulation cap (freeze).
+min_episodes_per_update = 4
+cohort_cap = 64
+# Maximum wait at a cohort boundary before invalidating open episodes
+# (SELL of existing positions is never blocked by the boundary).
+boundary_max_wait_ms = 360000

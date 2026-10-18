@@ -1,0 +1,10 @@
+# SpotStream — spot/oracle tick series for research (recorder, read-only).
+#
+# Records one sample per spot CHANGE (Binance) of each oracle asset
+# in a DB separate from StateStore and from the book analytics. It emits no
+# orders and does not go through RiskGuard/executor. The remaining parameters (db_path,
+# channel_capacity) live in the [spot_stream] section of config/general.toml —
+# `enabled` lives HERE because it is what the live toggle persists.
+
+[spot_stream]
+enabled = true

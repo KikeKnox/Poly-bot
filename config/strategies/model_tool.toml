@@ -1,0 +1,53 @@
+# ── ModelTool (observer of the numeric model) ────────────────────────────────
+# Producer of P(YES) probabilities — `src/tools/model/`. It lives as a supervisor
+# tool (it is NOT a strategy: it never emits orders nor reserves cash;
+# it only consumes market books and emits `ModelPrediction` to the broadcast that the
+# `ModelBtc5m` strategy consumes).
+#
+# The structural guarantee is that `ModelToolCtx` carries no `intent_tx`, `risk` or
+# `state`: it cannot emit orders by construction (same principle as
+# `ShadowCtx`).
+#
+# `enabled` is what the API/Telegram persists. The rest are optional overrides
+# over `ModelToolConfig::default()` (`src/tools/model/mod.rs`).
+#
+# NOTE — portability: `artifact_dir` is resolved relative to the CWD at runtime
+# (`src/tools/model/mod.rs::artifact_path`); an absolute path is honored as is. The
+# path below is RELATIVE to the repo root — when copying the folder to another
+# computer it keeps working without touching the TOML. Do NOT use absolute paths such as
+# `/home/user/...`.
+
+[model_tool]
+enabled = true
+
+# Versioned model artifact (manifest.json + model.json). The artifact's
+# internal TOML declares `boundaries.eval_mode=retrospective` and
+# `oos_operable=false` — the model is experimental; the sha256 of
+# `model.json` must match that of the external reference run:
+# `ef4e4b0860ef9601fb21462539f4d43d2c8af378060eb2dcb63d153502e4c396`.
+artifact_dir = "src/tools/model/artifacts/btc5m"
+
+# Directory of the probabilities JSONL record (research, not the active
+# DB). Path relative to the repo root — portable between machines.
+predictions_dir = "data/model_tool"
+
+# Minimum cadence between evaluations of the SAME market (ms). A numeric-model
+# decision needs no more than 1 runner tick (~500ms); 1000ms
+# gives headroom without saturating the broadcast.
+min_decision_interval_ms = 1000
+# Cadence of stats lines (s).
+stats_interval_secs = 60
+# Size of the producer→JSONL writer channel. 4096 ≈ ~1h of headroom at
+# ~1 sample/second (the producer drops with `try_send`, never blocks).
+channel_capacity = 4096
+# Size of the strategy↔tool broadcast. A small one (16) is enough: the strategy
+# consumes every book, it does not drain history.
+broadcast_capacity = 64
+
+# Latency budget (ms). `0` = derived from the signal horizon / 10
+# (minimum 1ms). 500ms explicit here: the decision must be emitted before the
+# runner's next tick.
+latency_budget_ms = 500
+# Signal horizon in ms (only used to derive the budget if
+# `latency_budget_ms == 0`).
+signal_horizon_ms = 30000

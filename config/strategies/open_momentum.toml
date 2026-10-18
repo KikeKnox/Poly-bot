@@ -1,0 +1,44 @@
+# OpenMomentum — entry in the first seconds after a bracket opens.
+#
+# The oracle already has a price at the open; if FV diverges from the initial ask (≈0.51),
+# there is an edge that the market corrects within seconds. OM captures that first tick.
+#
+# Gate to live: SQL analysis of the opening edge in the historical DB
+# (compare first-fill price vs FV at market_open_ts + N seconds).
+# If the average edge is < 3 cts, the strategy has no advantage.
+# Paper ≥ 48h after confirming the edge.
+
+[open_momentum]
+enabled = false
+
+max_orders_per_hour  = 30
+max_order_usdc       = "10"
+daily_loss_usdc_stop = "20"
+
+# Opening window: only enter if the bracket is less than max_open_secs old.
+# Restored 60→30s — the 4h calibration triggered the restoration
+# condition: WR 50% with mean entry 0.579 (needs >58%) and BUY markout
+# −633 bps at 5s (buying after the correction, not before).
+max_open_secs = 30
+
+# Confidence threshold: minimum |fv − 0.5| to choose a side.
+# Restored 0.05→0.08 (restoration condition triggered, see above).
+min_confidence = "0.08"
+
+# Maximum ask on entry. If the market already corrected the pricing, the edge is gone.
+# Restored 0.65→0.60 (restoration condition triggered, see above).
+max_entry_price = "0.60"
+
+# Minimum remaining time to enter (do not enter if the bracket is almost closed).
+min_remaining = 120
+
+# Bail-sell: σ × √t against the chosen side for bail_checks_required ticks.
+bail_sigma = "2.5"
+bail_checks_required = 3
+# Minimum bid to execute the bail-sell (do not sell into a dry market).
+min_bail_bid = "0.10"
+
+# Maximum size in shares. 0 = no cap (primary limit: max_order_usdc).
+max_size_shares = "0"
+# Maximum tolerable bid-ask spread. 0 = no filter.
+max_bid_ask_spread = "0"

@@ -1,0 +1,40 @@
+{
+  "kind": "rl_predictor.approval_report.v1",
+  "artifact": "paper_bootstrap_v1",
+  "scope": "paper",
+  "decision": "paper_approved",
+  "approved_by": "user (explicit authorization 2026-09-30): technical online-learning experiment in PAPER mode with simulated money",
+  "scope_limits": [
+    "PAPER mode ONLY (dry_run): the strategy has a structural barrier: panic in Mode::Live, paper_only=true, live_authorized=false",
+    "NOT an approval of edge, profitability or statistical sufficiency",
+    "NO out-of-sample evidence: the update was produced over ONE retrospective episode of ONE BTC 5m market",
+    "The PnL of the origin episode was NEGATIVE (-4055583 micro-USDC): bootstrap weights with known loss",
+    "fidelity=reduced in the origin run (scope_discarded_deltas=6, tokens_with_gap_scope=2)",
+    "Scaler fitted train-only over 703 steps sampled from the trajectory of the base episode (same tape, retrospective)"
+  ],
+  "weights_provenance": {
+    "policy_json_sha256": "70b1dffc0d5b281d1a6b05799607f56859f59d234ab795684fc9f8c8a0aa376a",
+    "weights_scaler_bias": "EXACT match with the verified tip — byte-level difference only in status (online_candidate->paper_approved) and the training doc",
+    "source_checkpoint_dir": "rl_predictor/integration/scratch/rl_online_proof/run_1790726049061/checkpoints/checkpoints/v000001",
+    "source_policy_sha256": "f6801832f638c3fc809399ad31f982f45ce68fcaa34f8624f46ea5b5faea4fd5",
+    "source_meta_sha256": "ebddd1c8f4ed23297fd7b92f345b2fa882b15ed4388bbb742cf6d17315555d86",
+    "source_online_manifest_sha256": "919e986b76b93f2eb14bf88d062ae82a9799ad6b0da98038c272e9ada8a3318a",
+    "update": "REINFORCE lr=0.05, cohort_episodes=1, grad_clip=1.0, update_l2=0.0005792758069836782, mean_kl=5.84e-8",
+    "base_policy_sha256": "399036fee7f955d239948c7cd6cebaccad1a7d81913b34ac3174f570becc10ff",
+    "base_artifact": "rl_predictor/integration/scratch/candidate_btc8000_v1 (scaler fit train-only, zero weights, provenance.json sha256 b011b9119e62cad0ad53fe0f53505bb74d8b09a760bd04bc09659c573632a32f)",
+    "trajectory_sha256": "73bbec06c40d47275c971eb0641aa1630e841351ba46f4d006f6937affeb32c9",
+    "trajectory_note": "transitions.jsonl of the run — real dump of the 1495 messages accepted by the learner; data_manifest_sha256 of the training doc points to THIS file_path",
+    "split_manifest_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 (EMPTY_MANIFEST_SHA256 sentinel — NO train/test split exists in an online run; declared, not fabricated)",
+    "predictor_sha256": "ef4e4b0860ef9601fb21462539f4d43d2c8af378060eb2dcb63d153502e4c396 (src/tools/model/artifacts/btc5m/model.json — frozen predictor, only the p_yes feature)",
+    "proof_json_sha256": "eb48fc4f944b83d36c7efc461f25c5b3dfc096184a7c25afa47bf53e4850e26d",
+    "proof_report": "LAB rl_predictor/integration/ONLINE_RUST_PROOF.md + EXTERNAL_DRIVER_PROOF.md"
+  },
+  "training_note": "run_id=run_1790726049061; completed_episodes=1, updates=1 (real counters from the meta.json of the tip checkpoint); data_manifest_sha256 = sha256 of the real trajectory consumed; no split (documented sentinel)",
+  "checks_before_promotion": [
+    "sha256(policy.json source) == f6801832... == declared meta.policy_sha256",
+    "meta.base_sha256 == 399036fe... == real sha256 of candidate_btc8000_v1/policy.json",
+    "online_manifest links[0] parent=399036fe... child=f6801832... promoted_as=online_candidate",
+    "load_approved requires: manifest.policy_sha256 == real sha256 of file_path, consistent predictor, contractual feature_schema, status=paper_approved, approval.scope=paper, training.completed_episodes>0 and updates>0"
+  ],
+  "created_by": "integrator, after verifying the full chain"
+}
